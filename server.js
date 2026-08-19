@@ -6,6 +6,8 @@
 // GET /events streams new messages to every open tab via SSE.
 
 const http = require('http');
+const os = require('os');
+const QRCode = require('qrcode');
 
 const PORT = 3000;
 const HOST = '0.0.0.0'; // listen on all interfaces so LAN peers can reach it
@@ -152,7 +154,7 @@ const HTML = [
   '    const DEVICE_KEY = "lanyell_device_id";',
   '    function getDeviceId() {',
   '      const os = detectOs();',
-  '      const rand = (crypto.randomUUID ? crypto.randomUUID() : "id" + Math.random().toString(36).slice(2)).replace(/-/g, "").slice(0, 6);',
+  '      const rand = (crypto.randomUUID ? crypto.randomUUID() : "id" + Math.random().toString(36).slice(2)).replace(/-/g, "").slice(0, 12);',
   '      const id = os + "-" + rand;',
   '      try {',
   '        const stored = localStorage.getItem(DEVICE_KEY);',
@@ -356,14 +358,40 @@ const server = http.createServer(async (req, res) => {
   res.end('Not Found');
 });
 
+// Find the first non-internal IPv4 address (the LAN address peers can reach)
+function getLanIp() {
+  const ifaces = os.networkInterfaces();
+  for (const name of Object.keys(ifaces)) {
+    for (const iface of ifaces[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return null;
+}
+
 // Only start the server when run directly (node server.js / npx lanyell).
 // When required by tests, just export the pure helpers without listening.
 if (require.main === module) {
-  server.listen(PORT, HOST, () => {
+  server.listen(PORT, HOST, async () => {
+    const ip = getLanIp();
+    const lanUrl = ip ? 'http://' + ip + ':' + PORT : null;
     console.log('lanyell is running');
     console.log('  local:   http://localhost:' + PORT);
-    console.log('  network: http://<your-LAN-IP>:' + PORT);
+    if (lanUrl) {
+      console.log('  network: ' + lanUrl);
+      // Render a terminal QR code so phones can scan to open
+      try {
+        const qr = await QRCode.toString(lanUrl, { type: 'terminal', small: true });
+        console.log('\n' + qr);
+      } catch (err) {
+        console.log('  (QR code unavailable: ' + err.message + ')');
+      }
+    } else {
+      console.log('  network: http://<your-LAN-IP>:' + PORT);
+    }
   });
 }
 
-module.exports = { parseOsFromUa, colorForDevice, sseFrame, DEVICE_COLORS };
+module.exports = { parseOsFromUa, colorForDevice, sseFrame, DEVICE_COLORS, getLanIp };

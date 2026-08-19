@@ -1,7 +1,7 @@
 {
   "name": "lanyell",
   "version": "0.1.0",
-  "description": "Zero-dependency, single-file LAN message board. npx lanyell and anyone on your WiFi can post messages that show up live on every screen.",
+  "description": "Single-file LAN message board. npx lanyell and anyone on your WiFi can post messages that show up live on every screen — scan the terminal QR code to join.",
   "license": "MIT",
   "author": "boomsi",
   "homepage": "https://github.com/boomsi/lanyell",
@@ -31,8 +31,10 @@
     "message-board",
     "chat",
     "sse",
-    "zero-dependency",
     "cli",
     "local-network"
-  ]
+  ],
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  }
 }
