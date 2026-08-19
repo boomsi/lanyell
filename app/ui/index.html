@@ -64,6 +64,16 @@
     .port-field input:focus { border-color: #4a90d9; }
     .port-field input:disabled { background: #f2f2f2; color: #999; cursor: not-allowed; }
 
+    /* keep-in-menu-bar option */
+    .tray-row {
+      display: flex; align-items: center; gap: 8px;
+      background: #fff; padding: 10px 18px; border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,.06); font-size: 13px; color: #555;
+      cursor: pointer;
+    }
+    .tray-row input { width: 16px; height: 16px; accent-color: #4a90d9; cursor: pointer; }
+    .tray-row .sub { font-size: 11px; color: #999; }
+
     .error {
       display: none; max-width: 340px; padding: 12px 16px;
       background: #ffeceb; color: #c0392b; border-radius: 10px;
@@ -86,6 +96,11 @@
   </div>
 
   <div class="error" id="error"></div>
+
+  <label class="tray-row" for="trayKeep">
+    <input type="checkbox" id="trayKeep" />
+    <span>Keep in menu bar <span class="sub">— stays after closing the window; quit from the tray</span></span>
+  </label>
 
   <div class="panel" id="panel">
     <div class="url" id="url" title="Click to copy"></div>

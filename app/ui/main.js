@@ -10,8 +10,31 @@ const panel = document.getElementById('panel');
 const urlEl = document.getElementById('url');
 const errorEl = document.getElementById('error');
 const portInput = document.getElementById('port');
+const trayKeepEl = document.getElementById('trayKeep');
 
 let on = false;
+
+// Keep-in-menu-bar: remembered across launches. When checked, closing the
+// window hides it and the app lives in the tray; quit only via the tray menu.
+const TRAY_KEY = 'lanyell_tray_keep';
+trayKeepEl.addEventListener('change', async () => {
+  const keep = trayKeepEl.checked;
+  try {
+    await invoke('set_tray_keep', { keep });
+    try { localStorage.setItem(TRAY_KEY, keep ? '1' : '0'); } catch (e) { /* ignore */ }
+  } catch (err) {
+    trayKeepEl.checked = !keep; // revert on failure
+    errorEl.textContent = String(err);
+    errorEl.classList.add('show');
+  }
+});
+// restore the remembered preference on load
+try {
+  if (localStorage.getItem(TRAY_KEY) === '1') {
+    trayKeepEl.checked = true;
+    invoke('set_tray_keep', { keep: true }).catch(() => { trayKeepEl.checked = false; });
+  }
+} catch (e) { /* localStorage unavailable: leave unchecked */ }
 
 // clamp the port input to 1-65535; returns the numeric port or null
 function readPort() {
