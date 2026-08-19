@@ -21,12 +21,14 @@
     /* the paste button is secondary, so it shares the input's light look */
     .btn-paste { background: #fff; color: #4a90d9; border: 1px solid #ddd; }
     .btn-paste:hover { border-color: #4a90d9; }
-    .btn-row { display: flex; gap: 8px; }
+    .btn-row { display: flex; gap: 8px; align-items: center; }
     .btn-row button { flex: 1; }
+    .btn-row .switch { flex: none; margin-left: 4px; }
     /* narrow screens (phones): stack the textarea above its own button row so
-       nothing is cramped on one line */
+       nothing is cramped on one line; default the input to two rows */
     @media (max-width: 480px) {
       form { flex-direction: column; align-items: stretch; }
+      textarea { height: 66px; }
       .btn-row { width: 100%; }
     }
     ul { list-style: none; margin: 0; padding: 0; }
@@ -40,6 +42,22 @@
     .delete { padding: 3px 10px; font-size: 12px; line-height: 1.4; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #ff3b30; cursor: pointer; transition: all .15s; }
     .delete:hover { border-color: #ff3b30; background: #ff3b30; color: #fff; }
     .content { display: block; white-space: pre-wrap; }
+    /* collapse mode: when the fold switch is on, long content is clipped at
+       200px with a gradient + a toggle to expand. */
+    body.fold-on .content.collapsible { max-height: 200px; overflow: hidden; position: relative; }
+    body.fold-on .content.collapsible.expanded { max-height: none; }
+    body.fold-on .content.collapsible:not(.expanded)::after {
+      content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 28px;
+      background: linear-gradient(transparent, #fff);
+    }
+    .fold-toggle { display: none; margin-top: 4px; font-size: 12px; color: #4a90d9; cursor: pointer; user-select: none; }
+    body.fold-on .fold-toggle.show { display: block; }
+    /* the fold switch: a small toggle on the right of the button row */
+    .switch { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #555; white-space: nowrap; }
+    .switch-track { width: 34px; height: 20px; border-radius: 10px; background: #ccc; position: relative; cursor: pointer; transition: background .15s; flex: none; }
+    .switch-track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; }
+    .switch.on .switch-track { background: #34c759; }
+    .switch.on .switch-track::after { left: 16px; }
   </style>
 </head>
 <body>
@@ -51,6 +69,10 @@
       <div class="btn-row">
         <button type="button" class="btn-paste" id="paste">Paste</button>
         <button type="submit">Send</button>
+        <div class="switch on" id="foldSwitch" title="Fold long messages">
+          <span>Fold</span>
+          <div class="switch-track"></div>
+        </div>
       </div>
     </form>
     <ul id="list"></ul>
@@ -222,10 +244,21 @@
       meta.appendChild(del);
       li.appendChild(meta);
       const content = document.createElement("span");
-      content.className = "content";
+      content.className = "content collapsible";
       content.textContent = msg.content;
       li.appendChild(content);
+      // fold toggle: shown only in fold-on mode when the content overflows 200px.
+      // Clicking it expands/collapses that single item.
+      const foldToggle = document.createElement("span");
+      foldToggle.className = "fold-toggle";
+      foldToggle.addEventListener("click", function () {
+        content.classList.toggle("expanded");
+        foldToggle.textContent = content.classList.contains("expanded") ? "collapse" : "expand";
+      });
+      li.appendChild(foldToggle);
       list.prepend(li); // newest on top
+      // measure after insertion to decide whether the toggle should show
+      applyFold(li);
     }
 
     // Remove a message element by id (called when a "delete" event arrives)
@@ -233,6 +266,62 @@
       const li = list.querySelector('li[data-id="' + CSS.escape(id) + '"]');
       if (li) li.remove();
     }
+
+    // Fold switch state (persisted): when on, long messages clip at 200px.
+    const FOLD_KEY = "lanyell_fold";
+    let foldOn = true;
+    try {
+      const stored = localStorage.getItem(FOLD_KEY);
+      if (stored !== null) foldOn = stored === "1";
+    } catch (e) { /* localStorage unavailable: keep default */ }
+    const foldSwitch = document.getElementById("foldSwitch");
+    const FOLD_LIMIT = 200;
+
+    // Apply/clear fold state on one item: show the toggle only if, in fold mode,
+    // the content's natural height exceeds the limit.
+    function applyFold(li) {
+      const content = li.querySelector(".content");
+      const toggle = li.querySelector(".fold-toggle");
+      if (!content || !toggle) return;
+      if (foldOn) {
+        // measure the un-clipped height by temporarily removing the limit
+        content.classList.add("expanded");
+        const fullHeight = content.scrollHeight;
+        content.classList.remove("expanded");
+        if (fullHeight > FOLD_LIMIT) {
+          toggle.classList.add("show");
+          toggle.textContent = content.classList.contains("expanded") ? "collapse" : "expand";
+        } else {
+          toggle.classList.remove("show");
+        }
+      } else {
+        // fold off: force expanded so everything shows fully
+        content.classList.add("expanded");
+        toggle.classList.remove("show");
+      }
+    }
+
+    // Re-apply fold to every rendered item (called when the switch toggles)
+    function applyFoldAll() {
+      list.querySelectorAll("li").forEach(applyFold);
+    }
+
+    // Reflect the current state on the <body> class + the switch UI
+    function syncFoldUi() {
+      document.body.classList.toggle("fold-on", foldOn);
+      foldSwitch.classList.toggle("on", foldOn);
+    }
+
+    // Persist + apply when the user flips the switch
+    foldSwitch.addEventListener("click", function () {
+      foldOn = !foldOn;
+      try { localStorage.setItem(FOLD_KEY, foldOn ? "1" : "0"); } catch (e) { /* ignore */ }
+      syncFoldUi();
+      applyFoldAll();
+    });
+
+    // Initialize on load
+    syncFoldUi();
 
     // SSE: stream events live (browser auto-reconnects).
     // Events are typed: "add" appends a message, "delete" removes one.

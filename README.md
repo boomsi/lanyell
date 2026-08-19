@@ -59,8 +59,9 @@ lanyell/
 
 - **Live updates** via Server-Sent Events — no refresh needed
 - **Terminal QR code** — scan to open on mobile, no typing required
-- **Auto-growing input** — single line by default, expands up to 4 lines (Enter to send, Shift+Enter for newline)
+- **Auto-growing input** — single line by default, expands up to 4 lines (Enter to send, Shift+Enter for newline); two rows by default on phones
 - **Paste button** — one tap to fill the input from the clipboard (over HTTPS/localhost); falls back to focusing the input with a manual-paste hint over plain http, where browsers block programmatic clipboard reads
+- **Fold switch** — on by default; long messages clip at 200px with an expand toggle. Turn it off to show every message in full. The preference is remembered.
 - **Per-device colors** — each device gets a stable light tint so you can tell senders apart
 - **Delete messages** — anyone can remove a message; the change syncs to every screen instantly
 - **Responsive** — on phone-width screens the input and its buttons stack vertically so nothing is cramped
