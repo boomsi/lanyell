@@ -24,3 +24,9 @@ Thumbs.db
 # Test coverage
 coverage/
 .nyc_output/
+
+# Desktop app build artifacts
+app/ui/bundle.js
+app/resources/
+app/src-tauri/binaries/
+app/src-tauri/target/
