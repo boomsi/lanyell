@@ -13,8 +13,10 @@
     form { display: flex; gap: 8px; margin: 16px 0; align-items: flex-end; }
     /* textarea auto-grow: single line by default, expands with content.
        JS only sets height = scrollHeight; the CSS max-height caps it at ~4 lines,
-       so the box-sizing border-box padding is preserved at every row count. */
-    textarea { flex: 1; padding: 11px 14px; font-size: 16px; line-height: 1.5; border: 1px solid #ddd; border-radius: 10px; outline: none; background: #fff; resize: none; overflow: hidden; height: 44px; max-height: 110px; }
+       so the box-sizing border-box padding is preserved at every row count.
+       --input-base is the reset height autoGrow returns to (1 row desktop,
+       2 rows on phones). */
+    textarea { flex: 1; padding: 11px 14px; font-size: 16px; line-height: 1.5; border: 1px solid #ddd; border-radius: 10px; outline: none; background: #fff; resize: none; overflow: hidden; height: var(--input-base, 44px); max-height: 110px; --input-base: 44px; }
     textarea:focus { border-color: #4a90d9; }
     button { padding: 11px 18px; font-size: 16px; border: none; border-radius: 10px; background: #4a90d9; color: #fff; cursor: pointer; }
     button:disabled { background: #aaa; }
@@ -26,17 +28,22 @@
     /* the switch matches the buttons' height so the row looks balanced */
     .btn-row .switch { flex: none; margin-left: 4px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border: 1px solid #ddd; border-radius: 10px; background: #fff; cursor: pointer; }
     /* narrow screens (phones): stack the textarea above its own button row so
-       nothing is cramped on one line; default the input to two rows */
+       nothing is cramped on one line; default the input to two rows (72px =
+       2 lines * 24px + 22px padding + 2px border). Item action buttons wrap
+       onto their own row below time/device. */
     @media (max-width: 480px) {
       form { flex-direction: column; align-items: stretch; }
-      textarea { height: 66px; }
+      textarea { height: 72px; --input-base: 72px; }
       .btn-row { width: 100%; }
+      .meta { flex-wrap: wrap; }
+      .meta .copy { margin-left: 0; }
+      .meta .btn-group { flex-basis: 100%; margin-top: 4px; }
     }
     ul { list-style: none; margin: 0; padding: 0; }
     li { background: #fff; padding: 11px 14px; border-radius: 10px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.06); word-break: break-word; }
     .meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
     .time, .device { color: #999; font-size: 12px; }
-    .copy { margin-left: auto; padding: 3px 10px; font-size: 12px; line-height: 1.4; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #555; cursor: pointer; transition: all .15s; }
+    .copy { padding: 3px 10px; font-size: 12px; line-height: 1.4; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #555; cursor: pointer; transition: all .15s; }
     .copy:hover { border-color: #4a90d9; color: #4a90d9; }
     .copy.copied { background: #34c759; color: #fff; border-color: #34c759; }
     .copy.failed { background: #ff3b30; color: #fff; border-color: #ff3b30; }
@@ -98,7 +105,9 @@
     // max-height caps growth at ~4 lines and keeps overflow internal, so padding
     // never disappears (do NOT recompute a JS ceiling — that drifts and eats padding).
     function autoGrow() {
-      input.style.height = "44px";
+      // reset to the CSS base (1 row desktop / 2 rows phone) then grow to content
+      const base = getComputedStyle(input).getPropertyValue("--input-base").trim() || "44px";
+      input.style.height = base;
       input.style.height = input.scrollHeight + "px";
     }
     input.addEventListener("input", autoGrow);
@@ -252,8 +261,15 @@
       meta.appendChild(time);
       meta.appendChild(device);
       // right group: fold toggle (if overflowing) -> Copy -> Delete.
-      // margin-left:auto lives on Copy (always visible) so the group stays
-      // right-aligned whether or not the toggle is shown.
+      // Wrapped in .btn-group so on phones the action buttons take their own
+      // row below time/device. margin-left:auto on the group keeps it
+      // right-aligned on desktop.
+      const btnGroup = document.createElement("div");
+      btnGroup.className = "btn-group";
+      btnGroup.style.marginLeft = "auto";
+      btnGroup.style.display = "flex";
+      btnGroup.style.gap = "8px";
+      btnGroup.style.alignItems = "center";
       const foldToggle = document.createElement("span");
       foldToggle.className = "fold-toggle";
       foldToggle.addEventListener("click", function () {
@@ -261,9 +277,10 @@
         foldToggle.textContent = expanded ? "collapse" : "expand";
         foldToggle.classList.toggle("collapsed", !expanded);
       });
-      meta.appendChild(foldToggle);
-      meta.appendChild(copy);
-      meta.appendChild(del);
+      btnGroup.appendChild(foldToggle);
+      btnGroup.appendChild(copy);
+      btnGroup.appendChild(del);
+      meta.appendChild(btnGroup);
       li.appendChild(meta);
       const content = document.createElement("span");
       content.className = "content collapsible";
