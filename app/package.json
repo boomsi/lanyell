@@ -6,6 +6,7 @@
   "scripts": {
     "build:ui": "esbuild ui/main.js --bundle --format=iife --outfile=ui/bundle.js",
     "build:sidecar": "node build-sidecar.js",
+    "build:mac": "npm run tauri -- build --bundles app && hdiutil create -volname lanyell -srcfolder src-tauri/target/release/bundle/macos/lanyell.app -ov -format UDZO src-tauri/target/release/bundle/macos/lanyell.dmg",
     "tauri": "tauri"
   },
   "devDependencies": {
