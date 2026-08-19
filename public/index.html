@@ -16,8 +16,14 @@
        so the box-sizing border-box padding is preserved at every row count.
        --input-base is the reset height autoGrow returns to (1 row desktop,
        2 rows on phones). */
-    textarea { flex: 1; padding: 11px 14px; font-size: 16px; line-height: 1.5; border: 1px solid #ddd; border-radius: 10px; outline: none; background: #fff; resize: none; overflow: hidden; height: var(--input-base, 44px); max-height: 110px; --input-base: 44px; }
+    textarea { flex: 1; padding: 11px 36px 11px 14px; font-size: 16px; line-height: 1.5; border: 1px solid #ddd; border-radius: 10px; outline: none; background: #fff; resize: none; overflow: hidden; height: var(--input-base, 44px); max-height: 110px; --input-base: 44px; }
     textarea:focus { border-color: #4a90d9; }
+    /* input wrapper + clear button inside the textarea's right side */
+    .input-wrap { position: relative; flex: 1; display: flex; }
+    .input-wrap textarea { width: 100%; }
+    .clear-btn { position: absolute; right: 8px; bottom: 8px; width: 22px; height: 22px; padding: 0; border: none; border-radius: 50%; background: #ccc; color: #fff; font-size: 14px; line-height: 22px; cursor: pointer; display: none; }
+    .clear-btn.show { display: block; }
+    .clear-btn:hover { background: #999; }
     button { padding: 11px 18px; font-size: 16px; border: none; border-radius: 10px; background: #4a90d9; color: #fff; cursor: pointer; }
     button:disabled { background: #aaa; }
     /* the paste button is secondary, so it shares the input's light look */
@@ -31,7 +37,7 @@
        nothing is cramped on one line; default the input to two rows (72px =
        2 lines * 24px + 22px padding + 2px border). Item action buttons wrap
        onto their own row below time/device. */
-    @media (max-width: 480px) {
+    @media (max-width: 768px) {
       form { flex-direction: column; align-items: stretch; }
       textarea { height: 72px; --input-base: 72px; }
       .btn-row { width: 100%; }
@@ -87,7 +93,10 @@
     <h1>lanyell</h1>
     <span class="status" id="status">connecting…</span>
     <form id="f">
-      <textarea id="m" placeholder="Type a message, Enter to send…" autocomplete="off" autofocus rows="1"></textarea>
+      <div class="input-wrap">
+        <textarea id="m" placeholder="Type a message, Enter to send…" autocomplete="off" autofocus rows="1"></textarea>
+        <button type="button" class="clear-btn" id="clear" title="Clear">×</button>
+      </div>
       <div class="btn-row">
         <button type="button" class="btn-paste" id="paste">Paste</button>
         <button type="submit">Send</button>
@@ -115,6 +124,20 @@
       input.style.height = input.scrollHeight + "px";
     }
     input.addEventListener("input", autoGrow);
+
+    // Clear button inside the input: shown only when there is text; clears
+    // and collapses the height back to the base.
+    const clearBtn = document.getElementById("clear");
+    function syncClearBtn() {
+      clearBtn.classList.toggle("show", input.value.length > 0);
+    }
+    input.addEventListener("input", syncClearBtn);
+    clearBtn.addEventListener("click", function () {
+      input.value = "";
+      autoGrow();
+      syncClearBtn();
+      input.focus();
+    });
 
     // Enter to send, Shift+Enter for a newline
     input.addEventListener("keydown", function (ev) {
@@ -378,6 +401,7 @@
       if (!content) return;
       input.value = "";
       autoGrow(); // collapse height after clearing
+      syncClearBtn(); // hide the clear button too
       input.disabled = true;
       try {
         const r = await fetch("/send", {
