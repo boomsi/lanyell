@@ -21,9 +21,10 @@
     /* the paste button is secondary, so it shares the input's light look */
     .btn-paste { background: #fff; color: #4a90d9; border: 1px solid #ddd; }
     .btn-paste:hover { border-color: #4a90d9; }
-    .btn-row { display: flex; gap: 8px; align-items: center; }
+    .btn-row { display: flex; gap: 8px; align-items: stretch; }
     .btn-row button { flex: 1; }
-    .btn-row .switch { flex: none; margin-left: 4px; }
+    /* the switch matches the buttons' height so the row looks balanced */
+    .btn-row .switch { flex: none; margin-left: 4px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border: 1px solid #ddd; border-radius: 10px; background: #fff; cursor: pointer; }
     /* narrow screens (phones): stack the textarea above its own button row so
        nothing is cramped on one line; default the input to two rows */
     @media (max-width: 480px) {
@@ -43,8 +44,8 @@
     .delete:hover { border-color: #ff3b30; background: #ff3b30; color: #fff; }
     .content { display: block; white-space: pre-wrap; }
     /* collapse mode: when the fold switch is on, long content is clipped at
-       200px with a gradient + a toggle to expand. */
-    body.fold-on .content.collapsible { max-height: 200px; overflow: hidden; position: relative; }
+       444px with a gradient + a toggle to expand. */
+    body.fold-on .content.collapsible { max-height: 444px; overflow: hidden; position: relative; }
     body.fold-on .content.collapsible.expanded { max-height: none; }
     body.fold-on .content.collapsible:not(.expanded)::after {
       content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 28px;
@@ -52,12 +53,15 @@
     }
     .fold-toggle { display: none; margin-top: 4px; font-size: 12px; color: #4a90d9; cursor: pointer; user-select: none; }
     body.fold-on .fold-toggle.show { display: block; }
-    /* the fold switch: a small toggle on the right of the button row */
-    .switch { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #555; white-space: nowrap; }
-    .switch-track { width: 34px; height: 20px; border-radius: 10px; background: #ccc; position: relative; cursor: pointer; transition: background .15s; flex: none; }
-    .switch-track::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; }
+    /* the fold switch: a pill toggle on the right of the button row,
+       sized to match the buttons' height */
+    .switch { font-size: 14px; color: #555; white-space: nowrap; user-select: none; }
+    .switch:hover { border-color: #4a90d9; }
+    .switch-track { width: 40px; height: 24px; border-radius: 12px; background: #ccc; position: relative; transition: background .15s; flex: none; }
+    .switch-track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .15s; }
+    .switch.on { color: #34c759; }
     .switch.on .switch-track { background: #34c759; }
-    .switch.on .switch-track::after { left: 16px; }
+    .switch.on .switch-track::after { left: 19px; }
   </style>
 </head>
 <body>
@@ -275,7 +279,7 @@
       if (stored !== null) foldOn = stored === "1";
     } catch (e) { /* localStorage unavailable: keep default */ }
     const foldSwitch = document.getElementById("foldSwitch");
-    const FOLD_LIMIT = 200;
+    const FOLD_LIMIT = 444;
 
     // Apply/clear fold state on one item: show the toggle only if, in fold mode,
     // the content's natural height exceeds the limit.
