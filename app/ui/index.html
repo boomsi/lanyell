@@ -51,20 +51,18 @@
     .url-hint { font-size: 12px; color: #999; }
     #qr { width: 180px; height: 180px; padding: 8px; background: #fff; border: 1px solid #eee; border-radius: 10px; }
 
-    /* port input, editable only while the server is off */
-    .port-row {
-      display: flex; align-items: center; gap: 10px;
-      background: #fff; padding: 12px 18px; border-radius: 14px;
-      box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    /* port input sits left of the switch in the same card; editable only
+       while the server is off */
+    .port-field {
+      display: flex; align-items: center; gap: 8px;
     }
-    .port-row label { font-size: 14px; color: #555; }
-    .port-row input {
-      width: 90px; padding: 8px 10px; font-size: 15px;
+    .port-field label { font-size: 14px; color: #555; }
+    .port-field input {
+      width: 78px; padding: 8px 10px; font-size: 15px;
       border: 1px solid #ddd; border-radius: 8px; outline: none; text-align: center;
     }
-    .port-row input:focus { border-color: #4a90d9; }
-    .port-row input:disabled { background: #f2f2f2; color: #999; cursor: not-allowed; }
-    .port-hint { font-size: 11px; color: #bbb; }
+    .port-field input:focus { border-color: #4a90d9; }
+    .port-field input:disabled { background: #f2f2f2; color: #999; cursor: not-allowed; }
 
     .error {
       display: none; max-width: 340px; padding: 12px 16px;
@@ -79,14 +77,12 @@
   <div class="hint">Flip the switch to start the LAN message board</div>
 
   <div class="switch-wrap">
+    <div class="port-field">
+      <label for="port">Port</label>
+      <input type="number" id="port" value="3000" min="1" max="65535" step="1" />
+    </div>
     <div class="switch" id="switch"></div>
     <span class="switch-label" id="switchLabel">Off</span>
-  </div>
-
-  <div class="port-row">
-    <label for="port">Port</label>
-    <input type="number" id="port" value="3000" min="1" max="65535" step="1" />
-    <span class="port-hint">1-65535</span>
   </div>
 
   <div class="error" id="error"></div>
