@@ -16,12 +16,12 @@
        so the box-sizing border-box padding is preserved at every row count.
        --input-base is the reset height autoGrow returns to (1 row desktop,
        2 rows on phones). */
-    textarea { flex: 1; padding: 11px 36px 11px 14px; font-size: 16px; line-height: 1.5; border: 1px solid #ddd; border-radius: 10px; outline: none; background: #fff; resize: none; overflow: hidden; height: var(--input-base, 44px); max-height: 110px; --input-base: 44px; }
+    textarea { flex: 1; padding: 11px 36px 11px 14px; font-size: 16px; line-height: 1.5; border: 1px solid #ddd; border-radius: 10px; outline: none; background: #fff; resize: none; overflow-y: auto; height: var(--input-base, 44px); max-height: 216px; --input-base: 44px; }
     textarea:focus { border-color: #4a90d9; }
     /* input wrapper + clear button inside the textarea's right side */
     .input-wrap { position: relative; flex: 1; display: flex; }
     .input-wrap textarea { width: 100%; }
-    .clear-btn { position: absolute; right: 8px; bottom: 8px; width: 22px; height: 22px; padding: 0; border: none; border-radius: 50%; background: #ccc; color: #fff; font-size: 14px; line-height: 22px; cursor: pointer; display: none; }
+    .clear-btn { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; padding: 0; border: none; border-radius: 50%; background: #ccc; color: #fff; font-size: 14px; line-height: 22px; cursor: pointer; display: none; }
     .clear-btn.show { display: block; }
     .clear-btn:hover { background: #999; }
     button { padding: 11px 18px; font-size: 16px; border: none; border-radius: 10px; background: #4a90d9; color: #fff; cursor: pointer; }
