@@ -226,17 +226,31 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("error while building lanyell app")
         .run(|app, event| {
-            // Kill the sidecar on any real exit path (Dock quit, Cmd+Q, tray
-            // Quit). Without this the child process outlives the app and the
-            // port stays occupied.
-            if let tauri::RunEvent::Exit = event {
-                if let Some(proc) = app.try_state::<ServerProc>() {
-                    if let Ok(mut guard) = proc.0.lock() {
-                        if let Some(child) = guard.take() {
-                            let _ = child.kill();
+            match event {
+                // Kill the sidecar on any real exit path (Dock quit, Cmd+Q,
+                // tray Quit). Without this the child process outlives the app
+                // and the port stays occupied.
+                tauri::RunEvent::Exit => {
+                    if let Some(proc) = app.try_state::<ServerProc>() {
+                        if let Ok(mut guard) = proc.0.lock() {
+                            if let Some(child) = guard.take() {
+                                let _ = child.kill();
+                            }
                         }
                     }
                 }
+                // macOS: clicking the Dock icon after the window was hidden
+                // must bring the window back (Reopen is the standard event).
+                #[cfg(target_os = "macos")]
+                tauri::RunEvent::Reopen { has_visible_windows, .. } => {
+                    if !has_visible_windows {
+                        if let Some(win) = app.get_webview_window("main") {
+                            let _ = win.show();
+                            let _ = win.set_focus();
+                        }
+                    }
+                }
+                _ => {}
             }
         });
 }

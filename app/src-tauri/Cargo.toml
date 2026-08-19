@@ -1,6 +1,6 @@
 [package]
 name = "lanyell-app"
-version = "0.2.0"
+version = "0.2.2"
 description = "lanyell desktop app - LAN message board"
 edition = "2021"
 
