@@ -18,6 +18,17 @@
     textarea:focus { border-color: #4a90d9; }
     button { padding: 11px 18px; font-size: 16px; border: none; border-radius: 10px; background: #4a90d9; color: #fff; cursor: pointer; }
     button:disabled { background: #aaa; }
+    /* the paste button is secondary, so it shares the input's light look */
+    .btn-paste { background: #fff; color: #4a90d9; border: 1px solid #ddd; }
+    .btn-paste:hover { border-color: #4a90d9; }
+    .btn-row { display: flex; gap: 8px; }
+    .btn-row button { flex: 1; }
+    /* narrow screens (phones): stack the textarea above its own button row so
+       nothing is cramped on one line */
+    @media (max-width: 480px) {
+      form { flex-direction: column; align-items: stretch; }
+      .btn-row { width: 100%; }
+    }
     ul { list-style: none; margin: 0; padding: 0; }
     li { background: #fff; padding: 11px 14px; border-radius: 10px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.06); word-break: break-word; }
     .meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
@@ -37,7 +48,10 @@
     <span class="status" id="status">connecting…</span>
     <form id="f">
       <textarea id="m" placeholder="Type a message, Enter to send…" autocomplete="off" autofocus rows="1"></textarea>
-      <button type="submit">Send</button>
+      <div class="btn-row">
+        <button type="button" class="btn-paste" id="paste">Paste</button>
+        <button type="submit">Send</button>
+      </div>
     </form>
     <ul id="list"></ul>
   </div>
@@ -103,6 +117,37 @@
       }
     }
     const deviceId = getDeviceId();
+
+    // Paste button: try to read the clipboard programmatically. Reading is more
+    // locked down than writing — on plain http (non-secure context) the clipboard
+    // API is unavailable and execCommand("paste") is blocked by modern browsers,
+    // so there is no reliable programmatic fallback. In that case we focus the
+    // input and tell the user to paste manually, instead of silently doing nothing.
+    const pasteBtn = document.getElementById("paste");
+    pasteBtn.addEventListener("click", async function () {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        try {
+          const text = await navigator.clipboard.readText();
+          if (text) {
+            input.value = text;
+            autoGrow();
+            input.focus();
+          } else {
+            input.focus();
+            alert("Clipboard is empty");
+          }
+          return;
+        } catch (err) {
+          // readText can throw even on https if the user dismisses the prompt
+          input.focus();
+          alert("Could not read clipboard. Press Ctrl/Cmd+V to paste manually.");
+          return;
+        }
+      }
+      // Non-secure context (http LAN): no programmatic read possible
+      input.focus();
+      alert("Press Ctrl/Cmd+V (or long-press) to paste — browsers block apps from reading the clipboard over http.");
+    });
 
     // Copy text: clipboard API needs a secure context (HTTPS/localhost); on LAN
     // http it is undefined, so fall back to execCommand (deprecated but the only
