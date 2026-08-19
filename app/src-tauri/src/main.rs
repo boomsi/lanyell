@@ -52,35 +52,34 @@ fn start_server(
         .map_err(|e| format!("failed to start server: {}", e))?;
 
     // Wait for the ready line (or an error exit) before reporting success.
-    let ready = std::sync::mpsc::channel();
-    {
-        let ready = ready.clone();
-        std::thread::spawn(move || {
-            while let Some(event) = rx.blocking_recv() {
-                match event {
-                    CommandEvent::Stdout(line) => {
-                        let s = String::from_utf8_lossy(&line.stdout).to_string();
-                        if s.contains("listening") {
-                            let _ = ready.0.send(Ok(()));
-                            return;
-                        }
-                    }
-                    CommandEvent::Stderr(line) => {
-                        let s = String::from_utf8_lossy(&line.stderr).to_string();
-                        let _ = ready.0.send(Err(s.trim().to_string()));
+    // A watcher thread forwards the outcome over a channel; in tauri-plugin-shell
+    // v2 the Stdout/Stderr payloads are plain Vec<u8>.
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel::<Result<(), String>>();
+    std::thread::spawn(move || {
+        while let Some(event) = rx.blocking_recv() {
+            match event {
+                CommandEvent::Stdout(bytes) => {
+                    if String::from_utf8_lossy(&bytes).contains("listening") {
+                        let _ = ready_tx.send(Ok(()));
                         return;
                     }
-                    CommandEvent::Error(e) => {
-                        let _ = ready.0.send(Err(e.to_string()));
-                        return;
-                    }
-                    _ => {}
                 }
+                CommandEvent::Stderr(bytes) => {
+                    let _ = ready_tx.send(Err(String::from_utf8_lossy(&bytes).trim().to_string()));
+                    return;
+                }
+                CommandEvent::Error(e) => {
+                    let _ = ready_tx.send(Err(e.to_string()));
+                    return;
+                }
+                _ => {}
             }
-        });
-    }
+        }
+        // The event stream ended (process exited) without a listening line.
+        let _ = ready_tx.send(Err("server exited before listening".into()));
+    });
 
-    match ready.1.recv_timeout(std::time::Duration::from_secs(5)) {
+    match ready_rx.recv_timeout(std::time::Duration::from_secs(5)) {
         Ok(Ok(())) => {}
         Ok(Err(msg)) => return Err(msg),
         Err(_) => return Err("server did not start within 5s".into()),
