@@ -45,7 +45,7 @@
     .content { display: block; white-space: pre-wrap; }
     /* collapse mode: only content that actually overflows gets clipped. The
        .overflows class is added by JS after measuring scrollHeight. */
-    body.fold-on .content.collapsible.overflows { max-height: 444px; overflow: hidden; position: relative; }
+    body.fold-on .content.collapsible.overflows { max-height: 222px; overflow: hidden; position: relative; }
     body.fold-on .content.collapsible.overflows.expanded { max-height: none; }
     /* the "已折叠" overlay: a 100px gradient at the bottom of a folded item,
        with the label centered. Only on folded (overflowing + not expanded). */
@@ -286,7 +286,7 @@
       if (stored !== null) foldOn = stored === "1";
     } catch (e) { /* localStorage unavailable: keep default */ }
     const foldSwitch = document.getElementById("foldSwitch");
-    const FOLD_LIMIT = 444;
+    const FOLD_LIMIT = 222;
 
     // Apply/clear fold state on one item. In fold mode, only content whose
     // natural height exceeds the limit gets the .overflows class (which drives
