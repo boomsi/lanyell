@@ -148,8 +148,10 @@ fn build_tray_menu(app: &tauri::AppHandle) -> tauri::menu::Menu<tauri::Wry> {
     tauri::menu::Menu::with_items(app, &[&show, &quit]).expect("tray menu")
 }
 
-/// Enable "keep in menu bar": register a tray icon, so closing the window
-/// hides it instead of exiting. Quit then only happens via the tray menu.
+/// Enable "keep in menu bar": register a tray icon. On macOS the app lives in
+/// the Dock regardless; the tray just adds a status-bar entry. Quitting happens
+/// via Dock right-click, Cmd+Q, or the tray menu — and the sidecar is killed
+/// on RunEvent::Exit no matter which path quits the app.
 #[tauri::command]
 fn set_tray_keep(app: tauri::AppHandle, state: State<TrayKeep>, keep: bool) -> Result<(), String> {
     *state.0.lock().unwrap() = keep;
@@ -167,23 +169,13 @@ fn set_tray_keep(app: tauri::AppHandle, state: State<TrayKeep>, keep: bool) -> R
                                 let _ = win.set_focus();
                             }
                         }
-                        "quit" => {
-                            // Kill the sidecar before exiting so no orphan remains.
-                            if let Some(proc) = app.try_state::<ServerProc>() {
-                                if let Ok(mut guard) = proc.0.lock() {
-                                    if let Some(child) = guard.take() {
-                                        let _ = child.kill();
-                                    }
-                                }
-                            }
-                            app.exit(0);
-                        }
+                        "quit" => app.exit(0),
                         _ => {}
                     }
                 })
                 .on_tray_icon_event(|tray, event| {
-                    // Left click toggles the main window (mac convention is to
-                    // show it; menus open on right click / any click on win).
+                    // Left click toggles the main window (menus open on right
+                    // click).
                     if let TrayIconEvent::Click {
                         button: MouseButton::Left,
                         button_state: MouseButtonState::Up,
@@ -208,15 +200,6 @@ fn set_tray_keep(app: tauri::AppHandle, state: State<TrayKeep>, keep: bool) -> R
     } else if let Some(tray) = app.tray_by_id("lanyell") {
         let _ = tray.set_visible(false);
         app.remove_tray_by_id("lanyell");
-        // If the window is already closed and tray mode was just disabled,
-        // there is nothing left to keep the app alive for — exit cleanly.
-        let window_open = app
-            .get_webview_window("main")
-            .map(|w| w.is_visible().unwrap_or(true))
-            .unwrap_or(false);
-        if !window_open {
-            app.exit(0);
-        }
     }
     Ok(())
 }
@@ -233,20 +216,27 @@ fn main() {
             set_tray_keep
         ])
         .on_window_event(|window, event| {
-            // With tray-keep on, the close button hides the window instead of
-            // destroying it; the app keeps running (quit via tray only).
+            // The close button NEVER exits the app — it only hides the window,
+            // the server keeps running. Quit via Dock / tray / Cmd+Q.
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                let keep = window
-                    .app_handle()
-                    .try_state::<TrayKeep>()
-                    .map(|s| *s.0.lock().unwrap())
-                    .unwrap_or(false);
-                if keep {
-                    api.prevent_close();
-                    let _ = window.hide();
-                }
+                api.prevent_close();
+                let _ = window.hide();
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running lanyell app");
+        .build(tauri::generate_context!())
+        .expect("error while building lanyell app")
+        .run(|app, event| {
+            // Kill the sidecar on any real exit path (Dock quit, Cmd+Q, tray
+            // Quit). Without this the child process outlives the app and the
+            // port stays occupied.
+            if let tauri::RunEvent::Exit = event {
+                if let Some(proc) = app.try_state::<ServerProc>() {
+                    if let Ok(mut guard) = proc.0.lock() {
+                        if let Some(child) = guard.take() {
+                            let _ = child.kill();
+                        }
+                    }
+                }
+            }
+        });
 }
