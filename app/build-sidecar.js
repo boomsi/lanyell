@@ -20,13 +20,23 @@ function hostTriple() {
   return m[1];
 }
 
+// Map a rust triple to the bun --target format (bun-darwin-arm64 etc.).
+// Arch is element 0; the OS sits at index 2 in every triple layout
+// (aarch64-apple-darwin, x86_64-pc-windows-msvc, x86_64-unknown-linux-gnu).
+function bunTarget(triple) {
+  const parts = triple.split('-');
+  const arch = parts[0] === 'aarch64' ? 'arm64' : parts[0] === 'x86_64' ? 'x64' : parts[0];
+  const os = parts[2];
+  return 'bun-' + os + '-' + arch;
+}
+
 const triple = process.argv[2] || hostTriple();
 fs.mkdirSync(binariesDir, { recursive: true });
 
 const outfile = path.join(binariesDir, 'lanyell-server-' + triple);
-console.log('compiling sidecar for ' + triple + ' -> ' + outfile);
+console.log('compiling sidecar for ' + triple + ' (bun target: ' + bunTarget(triple) + ') -> ' + outfile);
 execSync(
-  'bun build --compile --target=bun-' + triple.split('-').slice(0, 2).join('-') +
+  'bun build --compile --target=' + bunTarget(triple) +
   ' ' + path.join(appDir, 'sidecar.js') + ' --outfile ' + outfile,
   { stdio: 'inherit' }
 );
