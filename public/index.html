@@ -18,6 +18,9 @@
        2 rows on phones). */
     textarea { flex: 1; padding: 11px 36px 11px 14px; font-size: 16px; line-height: 1.5; border: 1px solid #ddd; border-radius: 10px; outline: none; background: #fff; resize: none; overflow-y: auto; height: var(--input-base, 44px); max-height: 216px; --input-base: 44px; }
     textarea:focus { border-color: #4a90d9; }
+    /* hide the input's scrollbar but keep it scrollable past 8 rows */
+    textarea { scrollbar-width: none; -ms-overflow-style: none; }
+    textarea::-webkit-scrollbar { display: none; }
     /* input wrapper + clear button inside the textarea's right side */
     .input-wrap { position: relative; flex: 1; display: flex; }
     .input-wrap textarea { width: 100%; }
@@ -26,13 +29,8 @@
     .clear-btn:hover { background: #999; }
     button { padding: 11px 18px; font-size: 16px; border: none; border-radius: 10px; background: #4a90d9; color: #fff; cursor: pointer; }
     button:disabled { background: #aaa; }
-    /* the paste button is secondary, so it shares the input's light look */
-    .btn-paste { background: #fff; color: #4a90d9; border: 1px solid #ddd; }
-    .btn-paste:hover { border-color: #4a90d9; }
     .btn-row { display: flex; gap: 8px; align-items: stretch; }
     .btn-row button { flex: 1; }
-    /* the switch matches the buttons' height so the row looks balanced */
-    .btn-row .switch { flex: none; margin-left: 4px; display: flex; align-items: center; gap: 8px; padding: 0 14px; border: 1px solid #ddd; border-radius: 10px; background: #fff; cursor: pointer; }
     /* narrow screens (phones): stack the textarea above its own button row so
        nothing is cramped on one line; default the input to two rows (72px =
        2 lines * 24px + 22px padding + 2px border). Item action buttons wrap
@@ -60,16 +58,16 @@
     .delete { padding: 3px 10px; font-size: 12px; line-height: 1.4; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #ff3b30; cursor: pointer; transition: all .15s; }
     .delete:hover { border-color: #ff3b30; background: #ff3b30; color: #fff; }
     .content { display: block; white-space: pre-wrap; }
-    /* collapse mode: only content that actually overflows gets clipped at
-       222px. Keep pre-wrap so the original formatting (newlines, spacing) is
-       preserved exactly. No ellipsis — line-clamp would break the format. */
-    body.fold-on .content.collapsible.overflows { max-height: 222px; overflow: hidden; }
-    body.fold-on .content.collapsible.overflows.expanded { max-height: none; }
+    /* collapse: only content that actually overflows gets clipped at 222px.
+       Keep pre-wrap so the original formatting (newlines, spacing) is preserved
+       exactly. No ellipsis — line-clamp would break the format. */
+    .content.collapsible.overflows { max-height: 222px; overflow: hidden; }
+    .content.collapsible.overflows.expanded { max-height: none; }
     /* expand/collapse toggle in the meta row, right-aligned with Copy/Delete.
-       Shown only for overflowing items while fold is on. */
+       Shown only for overflowing items. */
     .fold-toggle { display: none; padding: 3px 10px; font-size: 12px; line-height: 1.4; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #4a90d9; cursor: pointer; user-select: none; transition: all .15s; }
     .fold-toggle:hover { border-color: #4a90d9; }
-    body.fold-on .fold-toggle.show { display: inline-block; }
+    .fold-toggle.show { display: inline-block; }
     /* while folded (overflowing + not expanded) the toggle pulses strongly
        (color + glow) to signal the collapsed state */
     .fold-toggle.collapsed { animation: fold-pulse 1s ease-in-out infinite; }
@@ -77,15 +75,6 @@
       0%, 100% { border-color: #4a90d9; box-shadow: 0 0 0 0 rgba(74,144,217,0); background: #fff; }
       50%      { border-color: #2a6fc0; box-shadow: 0 0 8px 2px rgba(74,144,217,.55); background: #eaf2fb; }
     }
-    /* the fold switch: a pill toggle on the right of the button row,
-       sized to match the buttons' height */
-    .switch { font-size: 14px; color: #555; white-space: nowrap; user-select: none; }
-    .switch:hover { border-color: #4a90d9; }
-    .switch-track { width: 40px; height: 24px; border-radius: 12px; background: #ccc; position: relative; transition: background .15s; flex: none; }
-    .switch-track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .15s; }
-    .switch.on { color: #34c759; }
-    .switch.on .switch-track { background: #34c759; }
-    .switch.on .switch-track::after { left: 19px; }
   </style>
 </head>
 <body>
@@ -98,12 +87,7 @@
         <button type="button" class="clear-btn" id="clear" title="Clear">×</button>
       </div>
       <div class="btn-row">
-        <button type="button" class="btn-paste" id="paste">Paste</button>
         <button type="submit">Send</button>
-        <div class="switch on" id="foldSwitch" title="Fold long messages">
-          <span>Fold</span>
-          <div class="switch-track"></div>
-        </div>
       </div>
     </form>
     <ul id="list"></ul>
@@ -186,37 +170,6 @@
       }
     }
     const deviceId = getDeviceId();
-
-    // Paste button: try to read the clipboard programmatically. Reading is more
-    // locked down than writing — on plain http (non-secure context) the clipboard
-    // API is unavailable and execCommand("paste") is blocked by modern browsers,
-    // so there is no reliable programmatic fallback. In that case we focus the
-    // input and tell the user to paste manually, instead of silently doing nothing.
-    const pasteBtn = document.getElementById("paste");
-    pasteBtn.addEventListener("click", async function () {
-      if (navigator.clipboard && navigator.clipboard.readText) {
-        try {
-          const text = await navigator.clipboard.readText();
-          if (text) {
-            input.value = text;
-            autoGrow();
-            input.focus();
-          } else {
-            input.focus();
-            alert("Clipboard is empty");
-          }
-          return;
-        } catch (err) {
-          // readText can throw even on https if the user dismisses the prompt
-          input.focus();
-          alert("Could not read clipboard. Press Ctrl/Cmd+V to paste manually.");
-          return;
-        }
-      }
-      // Non-secure context (http LAN): no programmatic read possible
-      input.focus();
-      alert("Press Ctrl/Cmd+V (or long-press) to paste — browsers block apps from reading the clipboard over http.");
-    });
 
     // Copy text: clipboard API needs a secure context (HTTPS/localhost); on LAN
     // http it is undefined, so fall back to execCommand (deprecated but the only
@@ -324,64 +277,27 @@
       if (li) li.remove();
     }
 
-    // Fold switch state (persisted): when on, long messages clip at 200px.
-    const FOLD_KEY = "lanyell_fold";
-    let foldOn = true;
-    try {
-      const stored = localStorage.getItem(FOLD_KEY);
-      if (stored !== null) foldOn = stored === "1";
-    } catch (e) { /* localStorage unavailable: keep default */ }
-    const foldSwitch = document.getElementById("foldSwitch");
+    // Fold long messages: only content whose natural height exceeds the limit
+    // gets the .overflows class (clip + per-item expand toggle). Short content
+    // stays untouched. Unconditional — there is no global fold switch anymore.
     const FOLD_LIMIT = 222;
 
-    // Apply/clear fold state on one item. In fold mode, only content whose
-    // natural height exceeds the limit gets the .overflows class (which drives
-    // the clip + overlay + toggle). Short content stays untouched.
     function applyFold(li) {
       const content = li.querySelector(".content");
       const toggle = li.querySelector(".fold-toggle");
       if (!content || !toggle) return;
-      if (foldOn) {
-        // measure the un-clipped height: strip both clip states first
-        content.classList.remove("overflows", "expanded");
-        toggle.classList.remove("collapsed");
-        const fullHeight = content.scrollHeight;
-        if (fullHeight > FOLD_LIMIT) {
-          content.classList.add("overflows"); // clip applies via CSS
-          toggle.classList.add("show", "collapsed"); // collapsed -> spinning border
-          toggle.textContent = "expand";
-        } else {
-          toggle.classList.remove("show");
-        }
+      // measure the un-clipped height: strip both clip states first
+      content.classList.remove("overflows", "expanded");
+      toggle.classList.remove("collapsed");
+      const fullHeight = content.scrollHeight;
+      if (fullHeight > FOLD_LIMIT) {
+        content.classList.add("overflows"); // clip applies via CSS
+        toggle.classList.add("show", "collapsed"); // collapsed -> pulsing border
+        toggle.textContent = "expand";
       } else {
-        // fold off: no clip, no toggle; make sure any prior clip is cleared
-        content.classList.remove("overflows");
-        content.classList.add("expanded");
-        toggle.classList.remove("show", "collapsed");
+        toggle.classList.remove("show");
       }
     }
-
-    // Re-apply fold to every rendered item (called when the switch toggles)
-    function applyFoldAll() {
-      list.querySelectorAll("li").forEach(applyFold);
-    }
-
-    // Reflect the current state on the <body> class + the switch UI
-    function syncFoldUi() {
-      document.body.classList.toggle("fold-on", foldOn);
-      foldSwitch.classList.toggle("on", foldOn);
-    }
-
-    // Persist + apply when the user flips the switch
-    foldSwitch.addEventListener("click", function () {
-      foldOn = !foldOn;
-      try { localStorage.setItem(FOLD_KEY, foldOn ? "1" : "0"); } catch (e) { /* ignore */ }
-      syncFoldUi();
-      applyFoldAll();
-    });
-
-    // Initialize on load
-    syncFoldUi();
 
     // SSE: stream events live (browser auto-reconnects).
     // Events are typed: "add" appends a message, "delete" removes one.
