@@ -26,13 +26,17 @@ fn lan_ip() -> Option<String> {
 fn start_server(
     app: tauri::AppHandle,
     state: State<ServerProc>,
+    port: u16,
 ) -> Result<StartResult, String> {
     let mut guard = state.0.lock().unwrap();
     if guard.is_some() {
         return Err("server is already running".into());
     }
 
-    let port = 3000u16;
+    if !(1..=65535).contains(&port) {
+        return Err(format!("invalid port {} (must be 1-65535)", port));
+    }
+    let port = port;
     let resource_dir = app
         .path()
         .resource_dir()
@@ -105,11 +109,36 @@ fn stop_server(state: State<ServerProc>) -> Result<(), String> {
     }
 }
 
+/// Open a URL in the system default browser.
+#[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("open");
+        c.arg(&url);
+        c
+    };
+    #[cfg(target_os = "windows")]
+    let mut cmd = {
+        let mut c = std::process::Command::new("cmd");
+        c.args(["/C", "start", "", &url]);
+        c
+    };
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let mut cmd = {
+        let mut c = std::process::Command::new("xdg-open");
+        c.arg(&url);
+        c
+    };
+    cmd.spawn().map_err(|e| format!("failed to open browser: {}", e))?;
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .manage(ServerProc(Mutex::new(None)))
-        .invoke_handler(tauri::generate_handler![start_server, stop_server])
+        .invoke_handler(tauri::generate_handler![start_server, stop_server, open_url])
         .run(tauri::generate_context!())
         .expect("error while running lanyell app");
 }
