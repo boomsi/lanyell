@@ -7,6 +7,7 @@ const { DEVICE_COLORS, colorForDevice } = require('../lib/colors');
 const { sseFrame, broadcast } = require('../lib/sse');
 const { createStore } = require('../lib/store');
 const { createHandler, validateContent } = require('../lib/routes');
+const { parseArgs, parsePort, DEFAULT_PORT } = require('../lib/args');
 const { HTML } = require('../server.js');
 
 // ---------- lib/device ----------
@@ -59,7 +60,7 @@ test('broadcast writes the frame to every client', () => {
 });
 
 // ---------- lib/store ----------
-test('store.add appends a message and broadcasts to clients', () => {
+test('store.add appends a message and broadcasts an "add" event', () => {
   const store = createStore();
   let written = null;
   // a fake SSE response that records what gets written
@@ -70,7 +71,30 @@ test('store.add appends a message and broadcasts to clients', () => {
   assert.strictEqual(msg.content, 'hello');
   assert.strictEqual(msg.device, 'iOS-abcd1234');
   assert.ok(msg.color, 'message must carry a color');
-  assert.ok(written && written.includes('hello'), 'client must receive the broadcast');
+  // broadcast must be a typed "add" event wrapping the message
+  const event = JSON.parse(written.slice(6, -2));
+  assert.strictEqual(event.type, 'add');
+  assert.strictEqual(event.message.content, 'hello');
+});
+
+test('store.remove deletes by id and broadcasts a "delete" event', () => {
+  const store = createStore();
+  let written = null;
+  const fakeRes = { write: (s) => { written = s; } };
+  store.registerClient(fakeRes);
+  const msg = store.add('hello', 'iOS-abcd1234');
+  written = null;
+  const removed = store.remove(msg.id);
+  assert.strictEqual(removed, true);
+  assert.strictEqual(store.messages.length, 0);
+  const event = JSON.parse(written.slice(6, -2));
+  assert.strictEqual(event.type, 'delete');
+  assert.strictEqual(event.id, msg.id);
+});
+
+test('store.remove returns false for an unknown id', () => {
+  const store = createStore();
+  assert.strictEqual(store.remove('nope'), false);
 });
 
 test('store.resolveDevice derives OS+IP tail when device is missing', () => {
@@ -190,4 +214,61 @@ test('unknown route returns 404', async () => {
   const r = await fetchUrl(port, '/nope');
   assert.strictEqual(r.status, 404);
   server.close();
+});
+
+// ---------- DELETE /messages/:id ----------
+test('DELETE /messages/:id removes the message', async () => {
+  const { server, store, port } = await startTestServer();
+  await fetchUrl(port, '/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content: 'to be deleted', device: 'macOS-del' }),
+  });
+  const id = store.messages[0].id;
+  const r = await fetchUrl(port, '/messages/' + encodeURIComponent(id), { method: 'DELETE' });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(JSON.parse(r.body).ok, true);
+  assert.strictEqual(store.messages.length, 0, 'message must be removed from the store');
+  server.close();
+});
+
+test('DELETE a non-existent id returns 404', async () => {
+  const { server, port } = await startTestServer();
+  const r = await fetchUrl(port, '/messages/does-not-exist', { method: 'DELETE' });
+  assert.strictEqual(r.status, 404);
+  server.close();
+});
+
+// ---------- lib/args (port parsing) ----------
+test('parseArgs defaults to 3000 when no port given', () => {
+  assert.strictEqual(parseArgs(['node', 'server.js']).port, DEFAULT_PORT);
+});
+
+test('parseArgs accepts --port <n> and -p <n>', () => {
+  assert.strictEqual(parseArgs(['node', 'server.js', '--port', '8080']).port, 8080);
+  assert.strictEqual(parseArgs(['node', 'server.js', '-p', '9090']).port, 9090);
+});
+
+test('parseArgs accepts --port=<n> and -p=<n>', () => {
+  assert.strictEqual(parseArgs(['node', 'server.js', '--port=8080']).port, 8080);
+  assert.strictEqual(parseArgs(['node', 'server.js', '-p=9090']).port, 9090);
+});
+
+test('parseArgs throws on an out-of-range port', () => {
+  assert.throws(() => parseArgs(['node', 'server.js', '--port', '99999']), /between 1 and 65535/);
+  assert.throws(() => parseArgs(['node', 'server.js', '--port', '0']), /between 1 and 65535/);
+});
+
+test('parseArgs throws on a non-numeric port', () => {
+  assert.throws(() => parseArgs(['node', 'server.js', '--port', 'abc']), /between 1 and 65535/);
+});
+
+test('parseArgs throws when --port has no value', () => {
+  assert.throws(() => parseArgs(['node', 'server.js', '--port']), /requires a port number/);
+});
+
+test('parsePort coerces valid strings', () => {
+  assert.strictEqual(parsePort('3000', '--port'), 3000);
+  assert.strictEqual(parsePort('1', '--port'), 1);
+  assert.strictEqual(parsePort('65535', '--port'), 65535);
 });

@@ -1,6 +1,6 @@
 # lanyell
 
-A single-file LAN message board. Run one command and anyone on your WiFi can post messages that show up live on every screen.
+A LAN message board. Run one command and anyone on your WiFi can post messages that show up live on every screen.
 
 ## Quick start
 
@@ -15,15 +15,25 @@ On startup, lanyell prints the local URL **plus a terminal QR code** — others 
 
 > If others can't reach it, your OS firewall is likely blocking port 3000 — allow Node through it.
 
+### Custom port
+
+```bash
+npx lanyell --port 8080
+# or: npx lanyell -p 8080
+```
+
+If the port is already in use or requires root, lanyell prints a clear error instead of crashing silently.
+
 ## How it works
 
-lanyell is a small Node.js app. Its only runtime dependency is [`qrcode`](https://www.npmjs.com/package/qrcode), used to render the terminal QR code on startup. It serves three routes:
+lanyell is a small Node.js app. Its only runtime dependency is [`qrcode`](https://www.npmjs.com/package/qrcode), used to render the terminal QR code on startup. It serves these routes:
 
 | Route | Purpose |
 |-------|---------|
 | `GET /` | Serves the page (input box + message list) |
 | `POST /send` | Stores a message and broadcasts it |
-| `GET /events` | SSE stream that pushes new messages to every open tab |
+| `DELETE /messages/:id` | Deletes a message and broadcasts the removal |
+| `GET /events` | SSE stream that pushes add/delete events to every open tab |
 
 Messages are kept in memory (cleared on restart). New tabs receive the full history on connect.
 
@@ -37,7 +47,8 @@ lanyell/
 │   ├── device.js      # OS detection from User-Agent + LAN IP discovery
 │   ├── sse.js         # SSE frame encoding + broadcast helper
 │   ├── store.js       # In-memory message store (immutable updates)
-│   └── routes.js      # Dependency-injected HTTP request handler (unit-testable)
+│   ├── routes.js      # Dependency-injected HTTP request handler (unit-testable)
+│   └── args.js        # Minimal CLI arg parsing (--port / -p)
 ├── public/
 │   └── index.html     # The served page (input box, message list, client JS)
 └── test/
@@ -50,6 +61,8 @@ lanyell/
 - **Terminal QR code** — scan to open on mobile, no typing required
 - **Auto-growing input** — single line by default, expands up to 4 lines (Enter to send, Shift+Enter for newline)
 - **Per-device colors** — each device gets a stable light tint so you can tell senders apart
+- **Delete messages** — anyone can remove a message; the change syncs to every screen instantly
+- **Custom port** — `--port` / `-p` to pick a port; clear errors on conflict or permission
 - **Device id** — OS prefix (`iOS` / `macOS` / `Windows` / ...) + a persisted random segment
 - **Copy button** on every message (works over plain HTTP via `execCommand` fallback)
 

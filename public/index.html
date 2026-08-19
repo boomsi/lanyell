@@ -26,6 +26,8 @@
     .copy:hover { border-color: #4a90d9; color: #4a90d9; }
     .copy.copied { background: #34c759; color: #fff; border-color: #34c759; }
     .copy.failed { background: #ff3b30; color: #fff; border-color: #ff3b30; }
+    .delete { padding: 3px 10px; font-size: 12px; line-height: 1.4; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #ff3b30; cursor: pointer; transition: all .15s; }
+    .delete:hover { border-color: #ff3b30; background: #ff3b30; color: #fff; }
     .content { display: block; white-space: pre-wrap; }
   </style>
 </head>
@@ -129,6 +131,7 @@
     // Render one message (textContent everywhere to prevent XSS)
     function render(msg) {
       const li = document.createElement("li");
+      li.dataset.id = msg.id;
       li.style.background = msg.color || "#fff";
       const meta = document.createElement("div");
       meta.className = "meta";
@@ -159,9 +162,19 @@
           }, 1500);
         });
       });
+      const del = document.createElement("button");
+      del.className = "delete";
+      del.type = "button";
+      del.textContent = "Delete";
+      del.addEventListener("click", function () {
+        fetch("/messages/" + encodeURIComponent(msg.id), { method: "DELETE" })
+          .then(function (r) { if (!r.ok) throw new Error("delete failed"); })
+          .catch(function () { alert("delete failed"); });
+      });
       meta.appendChild(time);
       meta.appendChild(device);
       meta.appendChild(copy);
+      meta.appendChild(del);
       li.appendChild(meta);
       const content = document.createElement("span");
       content.className = "content";
@@ -170,11 +183,22 @@
       list.prepend(li); // newest on top
     }
 
-    // SSE: stream new messages live (browser auto-reconnects)
+    // Remove a message element by id (called when a "delete" event arrives)
+    function removeMessage(id) {
+      const li = list.querySelector('li[data-id="' + CSS.escape(id) + '"]');
+      if (li) li.remove();
+    }
+
+    // SSE: stream events live (browser auto-reconnects).
+    // Events are typed: "add" appends a message, "delete" removes one.
     const es = new EventSource("/events");
     es.onopen = function () { status.textContent = "connected"; };
     es.onerror = function () { status.textContent = "reconnecting…"; };
-    es.onmessage = function (e) { render(JSON.parse(e.data)); };
+    es.onmessage = function (e) {
+      const event = JSON.parse(e.data);
+      if (event.type === "add") render(event.message);
+      else if (event.type === "delete") removeMessage(event.id);
+    };
 
     // Submit on Enter or button click
     form.addEventListener("submit", async function (ev) {

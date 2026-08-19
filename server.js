@@ -13,8 +13,8 @@ const QRCode = require('qrcode');
 const { createStore } = require('./lib/store');
 const { createHandler } = require('./lib/routes');
 const { getLanIp } = require('./lib/device');
+const { parseArgs } = require('./lib/args');
 
-const PORT = 3000;
 const HOST = '0.0.0.0'; // listen on all interfaces so LAN peers can reach it
 
 // Load the page once at startup (synchronous read keeps the handler trivial)
@@ -29,11 +29,32 @@ const server = http.createServer(handler);
 // Only start the server when run directly (node server.js / npx lanyell).
 // When required by tests, just export without listening.
 if (require.main === module) {
-  server.listen(PORT, HOST, async () => {
+  let port;
+  try {
+    ({ port } = parseArgs(process.argv));
+  } catch (err) {
+    console.error('error: ' + err.message);
+    console.error('usage: npx lanyell [--port <1-65535>]');
+    process.exit(1);
+  }
+
+  server.on('error', (err) => {
+    // Surface port-in-use and permission errors instead of crashing silently
+    if (err.code === 'EADDRINUSE') {
+      console.error('error: port ' + port + ' is already in use. Try another with --port.');
+    } else if (err.code === 'EACCES') {
+      console.error('error: port ' + port + ' requires root (try a port >= 1024).');
+    } else {
+      console.error('error: ' + err.message);
+    }
+    process.exit(1);
+  });
+
+  server.listen(port, HOST, async () => {
     const ip = getLanIp();
-    const lanUrl = ip ? 'http://' + ip + ':' + PORT : null;
+    const lanUrl = ip ? 'http://' + ip + ':' + port : null;
     console.log('lanyell is running');
-    console.log('  local:   http://localhost:' + PORT);
+    console.log('  local:   http://localhost:' + port);
     if (lanUrl) {
       console.log('  network: ' + lanUrl);
       // Render a terminal QR code so phones can scan to open
@@ -44,7 +65,7 @@ if (require.main === module) {
         console.log('  (QR code unavailable: ' + err.message + ')');
       }
     } else {
-      console.log('  network: http://<your-LAN-IP>:' + PORT);
+      console.log('  network: http://<your-LAN-IP>:' + port);
     }
   });
 }
