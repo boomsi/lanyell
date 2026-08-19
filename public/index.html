@@ -36,23 +36,30 @@
     li { background: #fff; padding: 11px 14px; border-radius: 10px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.06); word-break: break-word; }
     .meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
     .time, .device { color: #999; font-size: 12px; }
-    .copy { margin-left: auto; padding: 3px 10px; font-size: 12px; line-height: 1.4; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #555; cursor: pointer; transition: all .15s; }
+    .copy { padding: 3px 10px; font-size: 12px; line-height: 1.4; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #555; cursor: pointer; transition: all .15s; }
     .copy:hover { border-color: #4a90d9; color: #4a90d9; }
     .copy.copied { background: #34c759; color: #fff; border-color: #34c759; }
     .copy.failed { background: #ff3b30; color: #fff; border-color: #ff3b30; }
     .delete { padding: 3px 10px; font-size: 12px; line-height: 1.4; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #ff3b30; cursor: pointer; transition: all .15s; }
     .delete:hover { border-color: #ff3b30; background: #ff3b30; color: #fff; }
     .content { display: block; white-space: pre-wrap; }
-    /* collapse mode: when the fold switch is on, long content is clipped at
-       444px with a gradient + a toggle to expand. */
-    body.fold-on .content.collapsible { max-height: 444px; overflow: hidden; position: relative; }
-    body.fold-on .content.collapsible.expanded { max-height: none; }
-    body.fold-on .content.collapsible:not(.expanded)::after {
-      content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 28px;
-      background: linear-gradient(transparent, #fff);
+    /* collapse mode: only content that actually overflows gets clipped. The
+       .overflows class is added by JS after measuring scrollHeight. */
+    body.fold-on .content.collapsible.overflows { max-height: 444px; overflow: hidden; position: relative; }
+    body.fold-on .content.collapsible.overflows.expanded { max-height: none; }
+    /* the "已折叠" overlay: a 100px gradient at the bottom of a folded item,
+       with the label centered. Only on folded (overflowing + not expanded). */
+    body.fold-on .content.collapsible.overflows:not(.expanded)::after {
+      content: "已折叠"; position: absolute; left: 0; right: 0; bottom: 0; height: 100px;
+      display: flex; align-items: center; justify-content: center;
+      color: #888; font-size: 13px;
+      background: linear-gradient(transparent, #fff 75%);
     }
-    .fold-toggle { display: none; margin-top: 4px; font-size: 12px; color: #4a90d9; cursor: pointer; user-select: none; }
-    body.fold-on .fold-toggle.show { display: block; }
+    /* expand/collapse toggle in the meta row, left of the Copy button.
+       Shown only for overflowing items while fold is on. */
+    .fold-toggle { display: none; padding: 3px 10px; font-size: 12px; line-height: 1.4; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #4a90d9; cursor: pointer; user-select: none; transition: all .15s; }
+    .fold-toggle:hover { border-color: #4a90d9; }
+    body.fold-on .fold-toggle.show { display: inline-block; }
     /* the fold switch: a pill toggle on the right of the button row,
        sized to match the buttons' height */
     .switch { font-size: 14px; color: #555; white-space: nowrap; user-select: none; }
@@ -244,6 +251,15 @@
       });
       meta.appendChild(time);
       meta.appendChild(device);
+      // right group: fold toggle (if overflowing) -> Copy -> Delete
+      const foldToggle = document.createElement("span");
+      foldToggle.className = "fold-toggle";
+      foldToggle.style.marginLeft = "auto";
+      foldToggle.addEventListener("click", function () {
+        content.classList.toggle("expanded");
+        foldToggle.textContent = content.classList.contains("expanded") ? "collapse" : "expand";
+      });
+      meta.appendChild(foldToggle);
       meta.appendChild(copy);
       meta.appendChild(del);
       li.appendChild(meta);
@@ -251,15 +267,6 @@
       content.className = "content collapsible";
       content.textContent = msg.content;
       li.appendChild(content);
-      // fold toggle: shown only in fold-on mode when the content overflows 200px.
-      // Clicking it expands/collapses that single item.
-      const foldToggle = document.createElement("span");
-      foldToggle.className = "fold-toggle";
-      foldToggle.addEventListener("click", function () {
-        content.classList.toggle("expanded");
-        foldToggle.textContent = content.classList.contains("expanded") ? "collapse" : "expand";
-      });
-      li.appendChild(foldToggle);
       list.prepend(li); // newest on top
       // measure after insertion to decide whether the toggle should show
       applyFold(li);
@@ -281,25 +288,27 @@
     const foldSwitch = document.getElementById("foldSwitch");
     const FOLD_LIMIT = 444;
 
-    // Apply/clear fold state on one item: show the toggle only if, in fold mode,
-    // the content's natural height exceeds the limit.
+    // Apply/clear fold state on one item. In fold mode, only content whose
+    // natural height exceeds the limit gets the .overflows class (which drives
+    // the clip + overlay + toggle). Short content stays untouched.
     function applyFold(li) {
       const content = li.querySelector(".content");
       const toggle = li.querySelector(".fold-toggle");
       if (!content || !toggle) return;
       if (foldOn) {
-        // measure the un-clipped height by temporarily removing the limit
-        content.classList.add("expanded");
+        // measure the un-clipped height: strip both clip states first
+        content.classList.remove("overflows", "expanded");
         const fullHeight = content.scrollHeight;
-        content.classList.remove("expanded");
         if (fullHeight > FOLD_LIMIT) {
+          content.classList.add("overflows"); // clip + overlay apply via CSS
           toggle.classList.add("show");
-          toggle.textContent = content.classList.contains("expanded") ? "collapse" : "expand";
+          toggle.textContent = "expand";
         } else {
           toggle.classList.remove("show");
         }
       } else {
-        // fold off: force expanded so everything shows fully
+        // fold off: no clip, no toggle; make sure any prior clip is cleared
+        content.classList.remove("overflows");
         content.classList.add("expanded");
         toggle.classList.remove("show");
       }
