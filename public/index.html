@@ -47,19 +47,19 @@
        .overflows class is added by JS after measuring scrollHeight. */
     body.fold-on .content.collapsible.overflows { max-height: 222px; overflow: hidden; position: relative; }
     body.fold-on .content.collapsible.overflows.expanded { max-height: none; }
-    /* the "已折叠" overlay: a 100px gradient at the bottom of a folded item,
-       with the label centered. Only on folded (overflowing + not expanded). */
-    body.fold-on .content.collapsible.overflows:not(.expanded)::after {
-      content: "已折叠"; position: absolute; left: 0; right: 0; bottom: 0; height: 100px;
-      display: flex; align-items: center; justify-content: center;
-      color: #888; font-size: 13px;
-      background: linear-gradient(transparent, #fff 75%);
-    }
-    /* expand/collapse toggle in the meta row, left of the Copy button.
+    /* expand/collapse toggle in the meta row, right-aligned with Copy/Delete.
        Shown only for overflowing items while fold is on. */
     .fold-toggle { display: none; padding: 3px 10px; font-size: 12px; line-height: 1.4; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #4a90d9; cursor: pointer; user-select: none; transition: all .15s; }
     .fold-toggle:hover { border-color: #4a90d9; }
     body.fold-on .fold-toggle.show { display: inline-block; }
+    /* while folded (overflowing + not expanded) the toggle border spins to
+       signal the item is collapsed */
+    .fold-toggle.collapsed { animation: spin-border 1.2s linear infinite; }
+    @keyframes spin-border {
+      from { border-color: #4a90d9; box-shadow: 0 0 0 0 rgba(74,144,217,.0); }
+      50%  { border-color: #bcd6f2; }
+      to   { border-color: #4a90d9; }
+    }
     /* the fold switch: a pill toggle on the right of the button row,
        sized to match the buttons' height */
     .switch { font-size: 14px; color: #555; white-space: nowrap; user-select: none; }
@@ -257,8 +257,9 @@
       const foldToggle = document.createElement("span");
       foldToggle.className = "fold-toggle";
       foldToggle.addEventListener("click", function () {
-        content.classList.toggle("expanded");
-        foldToggle.textContent = content.classList.contains("expanded") ? "collapse" : "expand";
+        const expanded = content.classList.toggle("expanded");
+        foldToggle.textContent = expanded ? "collapse" : "expand";
+        foldToggle.classList.toggle("collapsed", !expanded);
       });
       meta.appendChild(foldToggle);
       meta.appendChild(copy);
@@ -299,10 +300,11 @@
       if (foldOn) {
         // measure the un-clipped height: strip both clip states first
         content.classList.remove("overflows", "expanded");
+        toggle.classList.remove("collapsed");
         const fullHeight = content.scrollHeight;
         if (fullHeight > FOLD_LIMIT) {
-          content.classList.add("overflows"); // clip + overlay apply via CSS
-          toggle.classList.add("show");
+          content.classList.add("overflows"); // clip applies via CSS
+          toggle.classList.add("show", "collapsed"); // collapsed -> spinning border
           toggle.textContent = "expand";
         } else {
           toggle.classList.remove("show");
@@ -311,7 +313,7 @@
         // fold off: no clip, no toggle; make sure any prior clip is cleared
         content.classList.remove("overflows");
         content.classList.add("expanded");
-        toggle.classList.remove("show");
+        toggle.classList.remove("show", "collapsed");
       }
     }
 
