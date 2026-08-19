@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>lanyell</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: -apple-system, system-ui, sans-serif; background: #f5f5f7; color: #222; }
+    .wrap { width: 100%; max-width: 800px; margin: 0 auto; padding: 24px 16px 48px; }
+    h1 { font-size: 18px; font-weight: 600; margin: 0 0 4px; }
+    .status { font-size: 12px; color: #999; }
+    form { display: flex; gap: 8px; margin: 16px 0; align-items: flex-end; }
+    /* textarea auto-grow: single line by default, expands with content.
+       JS only sets height = scrollHeight; the CSS max-height caps it at ~4 lines,
+       so the box-sizing border-box padding is preserved at every row count. */
+    textarea { flex: 1; padding: 11px 14px; font-size: 16px; line-height: 1.5; border: 1px solid #ddd; border-radius: 10px; outline: none; background: #fff; resize: none; overflow: hidden; height: 44px; max-height: 110px; }
+    textarea:focus { border-color: #4a90d9; }
+    button { padding: 11px 18px; font-size: 16px; border: none; border-radius: 10px; background: #4a90d9; color: #fff; cursor: pointer; }
+    button:disabled { background: #aaa; }
+    ul { list-style: none; margin: 0; padding: 0; }
+    li { background: #fff; padding: 11px 14px; border-radius: 10px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.06); word-break: break-word; }
+    .meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .time, .device { color: #999; font-size: 12px; }
+    .copy { margin-left: auto; padding: 3px 10px; font-size: 12px; line-height: 1.4; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #555; cursor: pointer; transition: all .15s; }
+    .copy:hover { border-color: #4a90d9; color: #4a90d9; }
+    .copy.copied { background: #34c759; color: #fff; border-color: #34c759; }
+    .copy.failed { background: #ff3b30; color: #fff; border-color: #ff3b30; }
+    .content { display: block; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>lanyell</h1>
+    <span class="status" id="status">connecting…</span>
+    <form id="f">
+      <textarea id="m" placeholder="Type a message, Enter to send…" autocomplete="off" autofocus rows="1"></textarea>
+      <button type="submit">Send</button>
+    </form>
+    <ul id="list"></ul>
+  </div>
+  <script>
+    const list = document.getElementById("list");
+    const form = document.getElementById("f");
+    const input = document.getElementById("m");
+    const status = document.getElementById("status");
+
+    // Auto-grow: reset to baseline then set height = scrollHeight. The CSS
+    // max-height caps growth at ~4 lines and keeps overflow internal, so padding
+    // never disappears (do NOT recompute a JS ceiling — that drifts and eats padding).
+    function autoGrow() {
+      input.style.height = "44px";
+      input.style.height = input.scrollHeight + "px";
+    }
+    input.addEventListener("input", autoGrow);
+
+    // Enter to send, Shift+Enter for a newline
+    input.addEventListener("keydown", function (ev) {
+      if (ev.key === "Enter" && !ev.shiftKey) {
+        ev.preventDefault();
+        form.requestSubmit();
+      }
+    });
+
+    // Detect real OS: prefer userAgentData (new API, Chromium), fall back to UA string
+    function detectOs() {
+      if (navigator.userAgentData && navigator.userAgentData.platform) {
+        const p = navigator.userAgentData.platform.toLowerCase();
+        if (p === "ios") return "iOS";
+        if (p === "android") return "Android";
+        if (p === "macos") return "macOS";
+        if (p === "windows") return "Windows";
+        if (p === "linux") return "Linux";
+      }
+      const ua = navigator.userAgent;
+      if (/iPhone|iPad|iPod/.test(ua)) return "iOS";
+      if (/Android/.test(ua)) return "Android";
+      if (/Mac OS X|Macintosh/.test(ua)) return "macOS";
+      if (/Windows/.test(ua)) return "Windows";
+      if (/Linux/.test(ua)) return "Linux";
+      return "Web";
+    }
+
+    // Device id: OS prefix (real system) + a localStorage-persisted random segment
+    // (tells browser instances apart). Browsers expose no MAC/hardware id, so this
+    // is the environment ceiling.
+    const DEVICE_KEY = "lanyell_device_id";
+    function getDeviceId() {
+      const os = detectOs();
+      const rand = (crypto.randomUUID ? crypto.randomUUID() : "id" + Math.random().toString(36).slice(2)).replace(/-/g, "").slice(0, 12);
+      const id = os + "-" + rand;
+      try {
+        const stored = localStorage.getItem(DEVICE_KEY);
+        if (stored) return stored;
+        localStorage.setItem(DEVICE_KEY, id);
+        return id;
+      } catch (e) {
+        // localStorage unavailable (private mode, etc.): keep an in-memory var
+        if (!window.__lanyellDeviceId) window.__lanyellDeviceId = id;
+        return window.__lanyellDeviceId;
+      }
+    }
+    const deviceId = getDeviceId();
+
+    // Copy text: clipboard API needs a secure context (HTTPS/localhost); on LAN
+    // http it is undefined, so fall back to execCommand (deprecated but the only
+    // path that works over plain http).
+    function copyText(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text);
+      }
+      return new Promise(function (resolve, reject) {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand("copy") ? resolve() : reject(new Error("copy failed"));
+        } catch (e) {
+          reject(e);
+        } finally {
+          document.body.removeChild(ta);
+        }
+      });
+    }
+
+    // Render one message (textContent everywhere to prevent XSS)
+    function render(msg) {
+      const li = document.createElement("li");
+      li.style.background = msg.color || "#fff";
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      const time = document.createElement("span");
+      time.className = "time";
+      time.textContent = new Date(msg.time).toLocaleTimeString();
+      const device = document.createElement("span");
+      device.className = "device";
+      device.textContent = msg.device;
+      const copy = document.createElement("button");
+      copy.className = "copy";
+      copy.type = "button";
+      copy.textContent = "Copy";
+      copy.addEventListener("click", function () {
+        copyText(msg.content).then(function () {
+          copy.textContent = "✓ Copied";
+          copy.classList.add("copied");
+          setTimeout(function () {
+            copy.textContent = "Copy";
+            copy.classList.remove("copied");
+          }, 1500);
+        }).catch(function () {
+          copy.textContent = "✗ Failed";
+          copy.classList.add("failed");
+          setTimeout(function () {
+            copy.textContent = "Copy";
+            copy.classList.remove("failed");
+          }, 1500);
+        });
+      });
+      meta.appendChild(time);
+      meta.appendChild(device);
+      meta.appendChild(copy);
+      li.appendChild(meta);
+      const content = document.createElement("span");
+      content.className = "content";
+      content.textContent = msg.content;
+      li.appendChild(content);
+      list.prepend(li); // newest on top
+    }
+
+    // SSE: stream new messages live (browser auto-reconnects)
+    const es = new EventSource("/events");
+    es.onopen = function () { status.textContent = "connected"; };
+    es.onerror = function () { status.textContent = "reconnecting…"; };
+    es.onmessage = function (e) { render(JSON.parse(e.data)); };
+
+    // Submit on Enter or button click
+    form.addEventListener("submit", async function (ev) {
+      ev.preventDefault();
+      const content = input.value.trim();
+      if (!content) return;
+      input.value = "";
+      autoGrow(); // collapse height after clearing
+      input.disabled = true;
+      try {
+        const r = await fetch("/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: content, device: deviceId })
+        });
+        if (!r.ok) throw new Error((await r.json()).error || "send failed");
+      } catch (err) {
+        input.value = content;
+        autoGrow();
+        alert(err.message);
+      } finally {
+        input.disabled = false;
+        input.focus();
+      }
+    });
+  </script>
+</body>
+</html>

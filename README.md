@@ -17,7 +17,7 @@ On startup, lanyell prints the local URL **plus a terminal QR code** — others 
 
 ## How it works
 
-lanyell is a single Node.js file. Its only runtime dependency is [`qrcode`](https://www.npmjs.com/package/qrcode), used to render the terminal QR code on startup. It serves three routes:
+lanyell is a small Node.js app. Its only runtime dependency is [`qrcode`](https://www.npmjs.com/package/qrcode), used to render the terminal QR code on startup. It serves three routes:
 
 | Route | Purpose |
 |-------|---------|
@@ -26,6 +26,23 @@ lanyell is a single Node.js file. Its only runtime dependency is [`qrcode`](http
 | `GET /events` | SSE stream that pushes new messages to every open tab |
 
 Messages are kept in memory (cleared on restart). New tabs receive the full history on connect.
+
+## Project structure
+
+```
+lanyell/
+├── server.js          # CLI entry: wires modules together, starts the server, prints the QR code
+├── lib/
+│   ├── colors.js      # Per-device color palette + stable assignment
+│   ├── device.js      # OS detection from User-Agent + LAN IP discovery
+│   ├── sse.js         # SSE frame encoding + broadcast helper
+│   ├── store.js       # In-memory message store (immutable updates)
+│   └── routes.js      # Dependency-injected HTTP request handler (unit-testable)
+├── public/
+│   └── index.html     # The served page (input box, message list, client JS)
+└── test/
+    └── server.test.js # Pure-function unit tests + route integration tests
+```
 
 ## Features
 

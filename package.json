@@ -1,7 +1,7 @@
 {
   "name": "lanyell",
   "version": "0.1.0",
-  "description": "Single-file LAN message board. npx lanyell and anyone on your WiFi can post messages that show up live on every screen — scan the terminal QR code to join.",
+  "description": "LAN message board. npx lanyell and anyone on your WiFi can post messages that show up live on every screen — scan the terminal QR code to join.",
   "license": "MIT",
   "author": "boomsi",
   "homepage": "https://github.com/boomsi/lanyell",
@@ -17,7 +17,9 @@
   },
   "main": "server.js",
   "files": [
-    "server.js"
+    "server.js",
+    "lib/",
+    "public/"
   ],
   "scripts": {
     "start": "node server.js",
