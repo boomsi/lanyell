@@ -44,21 +44,28 @@
     .delete:hover { border-color: #ff3b30; background: #ff3b30; color: #fff; }
     .content { display: block; white-space: pre-wrap; }
     /* collapse mode: only content that actually overflows gets clipped. The
-       .overflows class is added by JS after measuring scrollHeight. */
-    body.fold-on .content.collapsible.overflows { max-height: 222px; overflow: hidden; position: relative; }
-    body.fold-on .content.collapsible.overflows.expanded { max-height: none; }
+       .overflows class is added by JS after measuring scrollHeight. Use
+       -webkit-line-clamp so the last visible line ends with "..." rather
+       than a hard cut. 222px content area ~ 8 lines at 16px/1.5. */
+    body.fold-on .content.collapsible.overflows {
+      display: -webkit-box; -webkit-box-orient: vertical;
+      -webkit-line-clamp: 8; line-clamp: 8;
+      overflow: hidden; white-space: normal;
+    }
+    body.fold-on .content.collapsible.overflows.expanded {
+      display: block; -webkit-line-clamp: unset; line-clamp: unset; max-height: none; white-space: pre-wrap;
+    }
     /* expand/collapse toggle in the meta row, right-aligned with Copy/Delete.
        Shown only for overflowing items while fold is on. */
     .fold-toggle { display: none; padding: 3px 10px; font-size: 12px; line-height: 1.4; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #4a90d9; cursor: pointer; user-select: none; transition: all .15s; }
     .fold-toggle:hover { border-color: #4a90d9; }
     body.fold-on .fold-toggle.show { display: inline-block; }
-    /* while folded (overflowing + not expanded) the toggle border spins to
-       signal the item is collapsed */
-    .fold-toggle.collapsed { animation: spin-border 1.2s linear infinite; }
-    @keyframes spin-border {
-      from { border-color: #4a90d9; box-shadow: 0 0 0 0 rgba(74,144,217,.0); }
-      50%  { border-color: #bcd6f2; }
-      to   { border-color: #4a90d9; }
+    /* while folded (overflowing + not expanded) the toggle pulses strongly
+       (color + glow) to signal the collapsed state */
+    .fold-toggle.collapsed { animation: fold-pulse 1s ease-in-out infinite; }
+    @keyframes fold-pulse {
+      0%, 100% { border-color: #4a90d9; box-shadow: 0 0 0 0 rgba(74,144,217,0); background: #fff; }
+      50%      { border-color: #2a6fc0; box-shadow: 0 0 8px 2px rgba(74,144,217,.55); background: #eaf2fb; }
     }
     /* the fold switch: a pill toggle on the right of the button row,
        sized to match the buttons' height */
