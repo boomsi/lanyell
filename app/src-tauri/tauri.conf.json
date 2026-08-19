@@ -26,6 +26,8 @@
     "active": true,
     "targets": ["dmg", "nsis"],
     "externalBin": ["binaries/lanyell-server"],
-    "resources": ["../resources/public"]
+    "resources": {
+      "../resources/public": "public"
+    }
   }
 }
