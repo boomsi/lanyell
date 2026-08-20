@@ -1,4 +1,8 @@
-# lanyell
+<p align="center">
+  <img src="app/src-tauri/icons/lanyell-logo.svg" width="128" height="128" alt="lanyell logo" />
+</p>
+
+<h1 align="center">lanyell</h1>
 
 A LAN message board. Run one command and anyone on your WiFi can post messages that show up live on every screen.
 
