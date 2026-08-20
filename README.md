@@ -16,6 +16,19 @@ npx lanyell
 
 On startup, lanyell prints the local URL **plus a terminal QR code** — others on your LAN just scan it with their phone to open, no typing required.
 
+## Desktop app
+
+Grab the installer from [GitHub Releases](https://github.com/boomsi/lanyell/releases) — `lanyell.dmg` for macOS, `lanyell-setup-*.exe` for Windows. Open the dmg and drag lanyell into Applications.
+
+> **macOS first launch:** the app is not code-signed, so Gatekeeper reports it as "damaged" or "from an unidentified developer". It isn't damaged — clear the quarantine flag once:
+>
+> ```bash
+> xattr -cr /Applications/lanyell.app
+> ```
+>
+> (Signing + notarization needs an Apple Developer account; if you're distributing to a wider audience, that's the proper fix.)
+
+
 - **You:** http://localhost:3000
 - **Others on your LAN:** http://&lt;your-LAN-IP&gt;:3000 (or scan the QR code)
 

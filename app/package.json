@@ -1,6 +1,6 @@
 {
   "name": "lanyell-app",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "private": true,
   "description": "lanyell desktop app (Tauri shell around the lanyell server sidecar)",
   "scripts": {
