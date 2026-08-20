@@ -60,10 +60,11 @@ jobs:
       - name: Build app (macos)
         if: runner.os == 'macOS'
         # Only bundle the .app (Tauri's dmg script needs a GUI session);
-        # create the dmg ourselves with hdiutil, same as the local script.
+        # package the dmg ourselves: app + /Applications symlink so the user
+        # gets the standard drag-to-install window.
         run: |
           npx tauri build --bundles app
-          hdiutil create -volname lanyell -srcfolder src-tauri/target/release/bundle/macos/lanyell.app -ov -format UDZO src-tauri/target/release/bundle/macos/lanyell.dmg
+          bash scripts/package-dmg.sh src-tauri/target/release/bundle/macos/lanyell.app src-tauri/target/release/bundle/macos/lanyell.dmg
 
       - name: Build app (windows)
         if: runner.os == 'Windows'
