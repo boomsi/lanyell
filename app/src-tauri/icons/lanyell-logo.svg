@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">lanyell logo</title>
+  <desc id="desc">A local network represented inside a message bubble.</desc>
+
+  <!-- Rounded blue tile keeps the brand recognizable across desktop platforms. -->
+  <rect x="32" y="32" width="960" height="960" rx="220" fill="#4a90d9" />
+
+  <!-- The bubble and three-node graph combine messaging with LAN connectivity. -->
+  <path
+    d="M246 235h532c75 0 136 61 136 136v238c0 75-61 136-136 136H493L302 868l36-123h-92c-75 0-136-61-136-136V371c0-75 61-136 136-136Z"
+    fill="none"
+    stroke="#fff"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="64"
+  />
+  <path d="M382 557 512 429l130 128" fill="none" stroke="#fff" stroke-linecap="round" stroke-width="44" />
+  <circle cx="382" cy="557" r="58" fill="#fff" />
+  <circle cx="512" cy="429" r="58" fill="#fff" />
+  <circle cx="642" cy="557" r="58" fill="#fff" />
+</svg>
