@@ -530,7 +530,7 @@
           <div class="dl">
             <div class="icon">🍎</div>
             <h3>macOS app</h3>
-            <p class="sub">Apple Silicon · v0.2.2</p>
+            <p class="sub" data-version>Apple Silicon · v0.2.2</p>
             <a
               class="btn"
               href="https://github.com/boomsi/lanyell/releases/latest/download/lanyell.dmg"
@@ -540,9 +540,12 @@
           <div class="dl">
             <div class="icon">🪟</div>
             <h3>Windows app</h3>
-            <p class="sub">x64 · v0.2.2</p>
+            <p class="sub" data-version>x64 · v0.2.2</p>
+            <!-- exe 文件名含版本号，latest/download/ 的静态链接在新版本发布后会 404，
+                 JS 会从 GitHub API 拉最新 asset URL 覆盖 href -->
             <a
               class="btn"
+              data-exe-link
               href="https://github.com/boomsi/lanyell/releases/latest/download/lanyell-setup-v0.2.2.exe"
               >Download .exe</a
             >
@@ -551,7 +554,7 @@
         <p class="dl-footnote">
           Desktop apps bundle the same server as a sidecar —
           <a href="https://github.com/boomsi/lanyell/releases">all releases</a>
-          are on GitHub. Version numbers on this page track the npm package.
+          are on GitHub.
         </p>
       </section>
 
@@ -640,6 +643,32 @@
         document.body.removeChild(ta);
         return ok;
       }
+
+      // 版本号跟随 GitHub latest release：静态 HTML 里写死 v0.2.2 作回退，
+      // 加载后从 API 拉最新 tag 更新显示，并解析真实 exe asset URL
+      // （exe 文件名含版本号，latest/download/ 静态路径在新版发布后会 404）
+      fetch("https://api.github.com/repos/boomsi/lanyell/releases/latest")
+        .then(function (res) {
+          return res.ok ? res.json() : Promise.reject(res.status);
+        })
+        .then(function (release) {
+          document.querySelectorAll("[data-version]").forEach(function (el) {
+            el.textContent = el.textContent.replace(
+              /v[\d.]+/,
+              release.tag_name,
+            );
+          });
+          const exe = (release.assets || []).find(function (a) {
+            return a.name.endsWith("-setup.exe") || a.name.endsWith(".exe");
+          });
+          if (exe) {
+            const link = document.querySelector("[data-exe-link]");
+            if (link) link.href = exe.browser_download_url;
+          }
+        })
+        .catch(function () {
+          // API 限流或离线时静默保留回退版本号与链接
+        });
     </script>
   </body>
 </html>

@@ -4,7 +4,7 @@
   "description": "LAN message board. npx lanyell and anyone on your WiFi can post messages that show up live on every screen — scan the terminal QR code to join.",
   "license": "MIT",
   "author": "boomsi",
-  "homepage": "https://github.com/boomsi/lanyell",
+  "homepage": "https://boomsi.github.io/lanyell/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/boomsi/lanyell.git"

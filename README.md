@@ -2,6 +2,8 @@
 
 A LAN message board. Run one command and anyone on your WiFi can post messages that show up live on every screen.
 
+**Website: https://boomsi.github.io/lanyell/**
+
 ## Usage
 
 ```bash
