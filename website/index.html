@@ -14,6 +14,7 @@
       content="npx lanyell — scan the QR code, and your whole LAN is on one message board."
     />
     <meta property="og:type" content="website" />
+    <link rel="icon" type="image/svg+xml" href="./lanyell-logo.svg" />
     <style>
       :root {
         --blue: #4a90d9;
@@ -83,13 +84,7 @@
         width: 26px;
         height: 26px;
         border-radius: 7px;
-        background: var(--blue);
-        color: #fff;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 15px;
-        font-weight: 700;
+        display: block;
       }
       .site-header nav {
         display: flex;
@@ -413,7 +408,15 @@
   <body>
     <div class="wrap">
       <header class="site-header">
-        <a class="brand" href="#top"><span class="logo">L</span>lanyell</a>
+        <a class="brand" href="#top"
+          ><img
+            class="logo"
+            src="./lanyell-logo.svg"
+            width="26"
+            height="26"
+            alt=""
+          />lanyell</a
+        >
         <nav>
           <a href="#features">Features</a>
           <a href="#download">Download</a>

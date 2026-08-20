@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="app/src-tauri/icons/lanyell-logo.svg" width="128" height="128" alt="lanyell logo" />
+  <img src="https://raw.githubusercontent.com/boomsi/lanyell/main/app/src-tauri/icons/lanyell-logo.svg" width="128" height="128" alt="lanyell logo" />
 </p>
 
 <h1 align="center">lanyell</h1>
