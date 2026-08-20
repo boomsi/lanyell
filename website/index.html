@@ -1,0 +1,645 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>lanyell — LAN message board</title>
+    <meta
+      name="description"
+      content="Run one command and anyone on your WiFi can post messages that show up live on every screen."
+    />
+    <meta property="og:title" content="lanyell — LAN message board" />
+    <meta
+      property="og:description"
+      content="npx lanyell — scan the QR code, and your whole LAN is on one message board."
+    />
+    <meta property="og:type" content="website" />
+    <style>
+      :root {
+        --blue: #4a90d9;
+        --blue-dark: #2a6fc0;
+        --green: #34c759;
+        --red: #ff3b30;
+        --text: #222;
+        --muted: #6e6e73;
+        --faint: #999;
+        --bg: #f5f5f7;
+        --card: #fff;
+        --border: #e5e5ea;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --text: #f5f5f7;
+          --muted: #a1a1a6;
+          --faint: #8e8e93;
+          --bg: #1c1c1e;
+          --card: #2c2c2e;
+          --border: #3a3a3c;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+      }
+      .wrap {
+        width: 100%;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 24px 16px 64px;
+      }
+      a {
+        color: var(--blue);
+        text-decoration: none;
+      }
+      a:hover {
+        color: var(--blue-dark);
+      }
+
+      /* --- header --- */
+      .site-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 64px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--text);
+      }
+      .brand:hover {
+        color: var(--text);
+      }
+      .brand .logo {
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        background: var(--blue);
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 15px;
+        font-weight: 700;
+      }
+      .site-header nav {
+        display: flex;
+        gap: 20px;
+        font-size: 15px;
+      }
+      .site-header nav a {
+        color: var(--muted);
+      }
+      .site-header nav a:hover {
+        color: var(--text);
+      }
+
+      /* --- hero --- */
+      .hero {
+        text-align: center;
+        margin-bottom: 72px;
+      }
+      .hero h1 {
+        font-size: 44px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        margin: 0 0 12px;
+      }
+      .hero p {
+        font-size: 18px;
+        color: var(--muted);
+        margin: 0 auto 28px;
+        max-width: 560px;
+      }
+      .hero .tagline-chip {
+        display: inline-block;
+        font-size: 13px;
+        color: var(--blue);
+        background: color-mix(in srgb, var(--blue) 12%, transparent);
+        border-radius: 999px;
+        padding: 4px 14px;
+        margin-bottom: 20px;
+      }
+      .cmd-box {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        max-width: 420px;
+        margin: 0 auto;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 14px 18px;
+      }
+      .cmd-box code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 16px;
+      }
+      .cmd-box .prompt {
+        color: var(--green);
+        user-select: none;
+      }
+      .copy-btn {
+        padding: 7px 14px;
+        font-size: 13px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--card);
+        color: var(--blue);
+        cursor: pointer;
+        transition: all 0.15s;
+        white-space: nowrap;
+      }
+      .copy-btn:hover {
+        border-color: var(--blue);
+      }
+      .copy-btn.copied {
+        background: var(--green);
+        color: #fff;
+        border-color: var(--green);
+      }
+      .hero .hint {
+        font-size: 13px;
+        color: var(--faint);
+        margin-top: 12px;
+      }
+
+      /* --- terminal demo --- */
+      .terminal {
+        background: #1d1f21;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+        margin: 0 auto 16px;
+        max-width: 560px;
+      }
+      .terminal .bar {
+        display: flex;
+        gap: 7px;
+        padding: 11px 14px;
+        background: rgba(255, 255, 255, 0.04);
+      }
+      .terminal .bar i {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+      }
+      .terminal .bar i:nth-child(1) {
+        background: #ff5f57;
+      }
+      .terminal .bar i:nth-child(2) {
+        background: #febc2e;
+      }
+      .terminal .bar i:nth-child(3) {
+        background: #28c840;
+      }
+      .terminal pre {
+        margin: 0;
+        padding: 16px 18px 20px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 13px;
+        line-height: 1.7;
+        color: #c5c8c6;
+        overflow-x: auto;
+      }
+      .terminal .t-prompt {
+        color: #28c840;
+      }
+      .terminal .t-cmd {
+        color: #eaeaea;
+      }
+      .terminal .t-dim {
+        color: #7c7f81;
+      }
+      .terminal .t-blue {
+        color: #81a2be;
+      }
+      .terminal .t-yellow {
+        color: #febc2e;
+      }
+      .qr-note {
+        text-align: center;
+        font-size: 13px;
+        color: var(--faint);
+        margin-bottom: 64px;
+      }
+      .qr-note .qr-mini {
+        display: inline-block;
+        vertical-align: -4px;
+        margin: 0 4px;
+      }
+
+      /* --- sections --- */
+      h2 {
+        font-size: 26px;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        margin: 0 0 24px;
+        text-align: center;
+      }
+      section {
+        margin-bottom: 80px;
+      }
+
+      /* features: card grid, same card look as the app's message list */
+      .features {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+      }
+      .feature {
+        background: var(--card);
+        border-radius: 10px;
+        padding: 18px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+      }
+      .feature .icon {
+        font-size: 22px;
+        margin-bottom: 8px;
+      }
+      .feature h3 {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0 0 6px;
+      }
+      .feature p {
+        font-size: 14px;
+        color: var(--muted);
+        margin: 0;
+      }
+
+      /* downloads: one card per platform */
+      .downloads {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+      }
+      .dl {
+        background: var(--card);
+        border-radius: 10px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+      }
+      .dl .icon {
+        font-size: 28px;
+        margin-bottom: 8px;
+      }
+      .dl h3 {
+        font-size: 15px;
+        font-weight: 600;
+        margin: 0 0 2px;
+      }
+      .dl .sub {
+        font-size: 12px;
+        color: var(--faint);
+        margin-bottom: 14px;
+      }
+      .dl a.btn {
+        display: inline-block;
+        padding: 9px 18px;
+        font-size: 14px;
+        border: none;
+        border-radius: 10px;
+        background: var(--blue);
+        color: #fff;
+        cursor: pointer;
+      }
+      .dl a.btn:hover {
+        background: var(--blue-dark);
+        color: #fff;
+      }
+      .dl-arch {
+        font-size: 12px;
+        color: var(--faint);
+        margin-top: 8px;
+      }
+      .dl-arch a {
+        color: var(--faint);
+        text-decoration: underline;
+      }
+      .dl-footnote {
+        text-align: center;
+        font-size: 13px;
+        color: var(--faint);
+        margin-top: 16px;
+      }
+
+      /* quick start: numbered steps */
+      .steps {
+        counter-reset: step;
+        display: grid;
+        gap: 12px;
+      }
+      .step {
+        display: flex;
+        gap: 14px;
+        background: var(--card);
+        border-radius: 10px;
+        padding: 16px 18px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+      }
+      .step::before {
+        counter-increment: step;
+        content: counter(step);
+        flex-shrink: 0;
+        width: 26px;
+        height: 26px;
+        border-radius: 50%;
+        background: var(--blue);
+        color: #fff;
+        font-size: 14px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 2px;
+      }
+      .step div {
+        font-size: 15px;
+      }
+      .step code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 13px;
+        background: color-mix(in srgb, var(--blue) 10%, transparent);
+        color: var(--blue);
+        border-radius: 5px;
+        padding: 1px 6px;
+      }
+      .step .note {
+        display: block;
+        font-size: 13px;
+        color: var(--faint);
+        margin-top: 4px;
+      }
+
+      /* footer */
+      footer {
+        text-align: center;
+        font-size: 13px;
+        color: var(--faint);
+        border-top: 1px solid var(--border);
+        padding-top: 24px;
+      }
+      footer a {
+        color: var(--muted);
+      }
+
+      /* phones: single column like the app */
+      @media (max-width: 768px) {
+        .hero h1 {
+          font-size: 34px;
+        }
+        .features,
+        .downloads {
+          grid-template-columns: 1fr;
+        }
+        .site-header nav {
+          gap: 14px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="site-header">
+        <a class="brand" href="#top"><span class="logo">L</span>lanyell</a>
+        <nav>
+          <a href="#features">Features</a>
+          <a href="#download">Download</a>
+          <a href="https://github.com/boomsi/lanyell">GitHub</a>
+        </nav>
+      </header>
+
+      <section class="hero" id="top">
+        <span class="tagline-chip"
+          >One command. One board. Everyone on your WiFi.</span
+        >
+        <h1>The LAN message board</h1>
+        <p>
+          Run one command and anyone on your WiFi can post messages that show up
+          live on every screen — no accounts, no setup.
+        </p>
+        <div class="cmd-box">
+          <code><span class="prompt">$</span> npx lanyell</code>
+          <button class="copy-btn" type="button">Copy</button>
+        </div>
+        <p class="hint">Node.js &ge; 18 · works on macOS, Linux and Windows</p>
+      </section>
+
+      <div class="terminal">
+        <div class="bar"><i></i><i></i><i></i></div>
+        <pre><span class="t-prompt">$</span> <span class="t-cmd">npx lanyell</span>
+<span class="t-blue">lanyell</span> v0.2.2 — LAN message board
+
+  ✔ board ready
+  <span class="t-dim">You:</span>        http://localhost:3000
+  <span class="t-dim">LAN:</span>        http://192.168.1.42:3000
+
+  Scan to join:
+  <span class="t-yellow">▛▀▀▀▀▀▀▀▀▀▀▛</span>
+  <span class="t-yellow">▌ ▞▖▗▝  ▖ ▌</span>   <span class="t-dim">others open this by</span>
+  <span class="t-yellow">▌ ▌█▐ ▟▙ ▌ ▌</span>   <span class="t-dim">scanning with a phone —</span>
+  <span class="t-yellow">▌ ▝▘▘ ▝  ▝ ▌</span>   <span class="t-dim">no typing required</span>
+  <span class="t-yellow">▙▄▄▄▄▄▄▄▄▄▄▟</span>
+
+<span class="t-dim">Ctrl+C to stop</span></pre>
+      </div>
+      <p class="qr-note">
+        On startup lanyell prints the LAN URL as a terminal QR code — phones
+        just scan to join.
+      </p>
+
+      <section id="features">
+        <h2>Features</h2>
+        <div class="features">
+          <div class="feature">
+            <div class="icon">⚡</div>
+            <h3>Live updates</h3>
+            <p>
+              Server-Sent Events push every new message to all screens instantly
+              — no refresh needed.
+            </p>
+          </div>
+          <div class="feature">
+            <div class="icon">📱</div>
+            <h3>Terminal QR code</h3>
+            <p>
+              Others scan the QR in your terminal to open the board on their
+              phone — no typing URLs.
+            </p>
+          </div>
+          <div class="feature">
+            <div class="icon">🎨</div>
+            <h3>Per-device colors</h3>
+            <p>
+              Each device gets a stable light tint, so you can tell senders
+              apart at a glance.
+            </p>
+          </div>
+          <div class="feature">
+            <div class="icon">✂️</div>
+            <h3>Fold long messages</h3>
+            <p>
+              Long messages clip at a fixed height with a per-item
+              expand/collapse toggle.
+            </p>
+          </div>
+          <div class="feature">
+            <div class="icon">🗑️</div>
+            <h3>Anyone can delete</h3>
+            <p>
+              Remove any message; the change syncs to every screen instantly.
+            </p>
+          </div>
+          <div class="feature">
+            <div class="icon">📐</div>
+            <h3>Responsive &amp; zero-deps client</h3>
+            <p>
+              One plain HTML file, no build step, stacks cleanly on phone-width
+              screens.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="download">
+        <h2>Get lanyell</h2>
+        <div class="downloads">
+          <div class="dl">
+            <div class="icon">💻</div>
+            <h3>CLI (npm)</h3>
+            <p class="sub">macOS · Linux · Windows</p>
+            <a
+              class="btn"
+              href="https://www.npmjs.com/package/lanyell"
+              rel="noopener"
+              >npx lanyell</a
+            >
+          </div>
+          <div class="dl">
+            <div class="icon">🍎</div>
+            <h3>macOS app</h3>
+            <p class="sub">Apple Silicon · v0.2.2</p>
+            <a
+              class="btn"
+              href="https://github.com/boomsi/lanyell/releases/latest/download/lanyell.dmg"
+              >Download .dmg</a
+            >
+          </div>
+          <div class="dl">
+            <div class="icon">🪟</div>
+            <h3>Windows app</h3>
+            <p class="sub">x64 · v0.2.2</p>
+            <a
+              class="btn"
+              href="https://github.com/boomsi/lanyell/releases/latest/download/lanyell-setup-v0.2.2.exe"
+              >Download .exe</a
+            >
+          </div>
+        </div>
+        <p class="dl-footnote">
+          Desktop apps bundle the same server as a sidecar —
+          <a href="https://github.com/boomsi/lanyell/releases">all releases</a>
+          are on GitHub. Version numbers on this page track the npm package.
+        </p>
+      </section>
+
+      <section id="quickstart">
+        <h2>Quick start</h2>
+        <div class="steps">
+          <div class="step">
+            <div>
+              Run it
+              <span class="note"
+                >Node.js &ge; 18. Pick another port with
+                <code>npx lanyell --port 8080</code>.</span
+              >
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              Share it
+              <span class="note"
+                >Others scan the terminal QR code, or open
+                <code>http://&lt;your-LAN-IP&gt;:3000</code>.</span
+              >
+            </div>
+          </div>
+          <div class="step">
+            <div>
+              Post away
+              <span class="note"
+                >Messages appear live on every screen. If others can't reach it,
+                allow Node through your OS firewall.</span
+              >
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer>
+        <a href="https://github.com/boomsi/lanyell">GitHub</a> ·
+        <a href="https://www.npmjs.com/package/lanyell">npm</a> · MIT License<br />
+        Made for rooms where shouting across the office is too far.
+      </footer>
+    </div>
+
+    <script>
+      // 复制命令按钮：和 app 内的 copy 行为一致，优先 Clipboard API，HTTP 下回退 execCommand
+      document.querySelectorAll(".copy-btn").forEach(function (btn) {
+        btn.addEventListener("click", function () {
+          const text = btn.parentElement
+            .querySelector("code")
+            .textContent.replace(/^\$\s*/, "");
+          function done(ok) {
+            btn.textContent = ok ? "Copied!" : "Copy failed";
+            btn.classList.toggle("copied", ok);
+            setTimeout(function () {
+              btn.textContent = "Copy";
+              btn.classList.remove("copied");
+            }, 1500);
+          }
+          if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard
+              .writeText(text)
+              .then(function () {
+                done(true);
+              })
+              .catch(function () {
+                done(fallbackCopy(text));
+              });
+          } else {
+            done(fallbackCopy(text));
+          }
+        });
+      });
+      function fallbackCopy(text) {
+        const ta = document.createElement("textarea");
+        ta.value = text;
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        let ok = false;
+        try {
+          ok = document.execCommand("copy");
+        } catch (e) {
+          ok = false;
+        }
+        document.body.removeChild(ta);
+        return ok;
+      }
+    </script>
+  </body>
+</html>
