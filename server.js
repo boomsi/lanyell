@@ -14,6 +14,7 @@ const { createStore } = require('./lib/store');
 const { createHandler } = require('./lib/routes');
 const { getLanIp } = require('./lib/device');
 const { parseArgs } = require('./lib/args');
+const { listenWithFallback } = require('./lib/listen');
 
 const HOST = '0.0.0.0'; // listen on all interfaces so LAN peers can reach it
 
@@ -29,45 +30,50 @@ const server = http.createServer(handler);
 // Only start the server when run directly (node server.js / npx lanyell).
 // When required by tests, just export without listening.
 if (require.main === module) {
-  let port;
+  let port, portExplicit;
   try {
-    ({ port } = parseArgs(process.argv));
+    ({ port, portExplicit } = parseArgs(process.argv));
   } catch (err) {
     console.error('error: ' + err.message);
     console.error('usage: npx lanyell [--port <1-65535>]');
     process.exit(1);
   }
 
-  server.on('error', (err) => {
-    // Surface port-in-use and permission errors instead of crashing silently
-    if (err.code === 'EADDRINUSE') {
-      console.error('error: port ' + port + ' is already in use. Try another with --port.');
-    } else if (err.code === 'EACCES') {
-      console.error('error: port ' + port + ' requires root (try a port >= 1024).');
-    } else {
-      console.error('error: ' + err.message);
-    }
-    process.exit(1);
-  });
-
-  server.listen(port, HOST, async () => {
-    const ip = getLanIp();
-    const lanUrl = ip ? 'http://' + ip + ':' + port : null;
-    console.log('lanyell is running');
-    console.log('  local:   http://localhost:' + port);
-    if (lanUrl) {
-      console.log('  network: ' + lanUrl);
-      // Render a terminal QR code so phones can scan to open
-      try {
-        const qr = await QRCode.toString(lanUrl, { type: 'terminal', small: true });
-        console.log('\n' + qr);
-      } catch (err) {
-        console.log('  (QR code unavailable: ' + err.message + ')');
+  // 默认端口被占时自动 +1 找空闲端口;显式指定的端口被占则直接报错 ——
+  // 用户点名的端口不能悄悄换。横幅/QR 用最终落地端口。
+  listenWithFallback(server, port, HOST, !portExplicit)
+    .then(async (actualPort) => {
+      if (actualPort !== port) {
+        console.log('note: port ' + port + ' was busy, using ' + actualPort + ' instead');
       }
-    } else {
-      console.log('  network: http://<your-LAN-IP>:' + port);
-    }
-  });
+      const ip = getLanIp();
+      const lanUrl = ip ? 'http://' + ip + ':' + actualPort : null;
+      console.log('lanyell is running');
+      console.log('  local:   http://localhost:' + actualPort);
+      if (lanUrl) {
+        console.log('  network: ' + lanUrl);
+        // Render a terminal QR code so phones can scan to open
+        try {
+          const qr = await QRCode.toString(lanUrl, { type: 'terminal', small: true });
+          console.log('\n' + qr);
+        } catch (err) {
+          console.log('  (QR code unavailable: ' + err.message + ')');
+        }
+      } else {
+        console.log('  network: http://<your-LAN-IP>:' + actualPort);
+      }
+    })
+    .catch((err) => {
+      // Surface port-in-use and permission errors instead of crashing silently
+      if (err.code === 'EADDRINUSE') {
+        console.error('error: ' + err.message + (portExplicit ? ' Try another with --port.' : ''));
+      } else if (err.code === 'EACCES') {
+        console.error('error: port ' + port + ' requires root (try a port >= 1024).');
+      } else {
+        console.error('error: ' + err.message);
+      }
+      process.exit(1);
+    });
 }
 
 module.exports = { server, store, handler, HTML };
