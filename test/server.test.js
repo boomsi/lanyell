@@ -6,7 +6,8 @@ const { parseOsFromUa, getLanIp } = require('../lib/device');
 const { DEVICE_COLORS, colorForDevice } = require('../lib/colors');
 const { sseFrame, broadcast } = require('../lib/sse');
 const { createStore } = require('../lib/store');
-const { createHandler, validateContent } = require('../lib/routes');
+const { createHandler, validateContent, readBody } = require('../lib/routes');
+const { SINGLE_PART_LIMIT, TOTAL_LIMIT } = require('../lib/split');
 const { parseArgs, parsePort, DEFAULT_PORT } = require('../lib/args');
 const { HTML } = require('../server.js');
 
@@ -66,15 +67,49 @@ test('store.add appends a message and broadcasts an "add" event', () => {
   // a fake SSE response that records what gets written
   const fakeRes = { write: (s) => { written = s; } };
   store.registerClient(fakeRes);
-  const msg = store.add('hello', 'iOS-abcd1234');
+  const created = store.add('hello', 'iOS-abcd1234');
   assert.strictEqual(store.messages.length, 1);
-  assert.strictEqual(msg.content, 'hello');
-  assert.strictEqual(msg.device, 'iOS-abcd1234');
-  assert.ok(msg.color, 'message must carry a color');
+  assert.strictEqual(created.length, 1);
+  assert.strictEqual(created[0].content, 'hello');
+  assert.strictEqual(created[0].device, 'iOS-abcd1234');
+  assert.ok(created[0].color, 'message must carry a color');
+  assert.strictEqual(created[0].group, undefined, 'a single message carries no group');
   // broadcast must be a typed "add" event wrapping the message
   const event = JSON.parse(written.slice(6, -2));
   assert.strictEqual(event.type, 'add');
   assert.strictEqual(event.message.content, 'hello');
+});
+
+test('store.add splits overlong content into a linked group of parts', () => {
+  const store = createStore();
+  const writes = [];
+  const fakeRes = { write: (s) => writes.push(s) };
+  store.registerClient(fakeRes);
+  const content = 'x'.repeat(SINGLE_PART_LIMIT * 2 + 1); // 20001 -> 3 parts
+  const created = store.add(content, 'macOS-split');
+  assert.strictEqual(store.messages.length, 3);
+  assert.strictEqual(created.length, 3);
+  assert.strictEqual(created.map((m) => m.content).join(''), content, 'parts must join back losslessly');
+  // every part carries the same group marker with correct index/total
+  const gid = created[0].group.id;
+  created.forEach((m, i) => {
+    assert.strictEqual(m.group.id, gid);
+    assert.strictEqual(m.group.index, i);
+    assert.strictEqual(m.group.total, 3);
+  });
+  // one SSE frame per part, in part order
+  assert.strictEqual(writes.length, 3);
+  const events = writes.map((w) => JSON.parse(w.slice(6, -2)));
+  assert.strictEqual(events[0].message.group.index, 0);
+  assert.strictEqual(events[2].message.group.index, 2);
+});
+
+test('store.remove on one part deletes the whole group', () => {
+  const store = createStore();
+  const created = store.add('x'.repeat(SINGLE_PART_LIMIT + 1), 'iOS-group-del'); // 2 parts
+  assert.strictEqual(store.messages.length, 2);
+  assert.strictEqual(store.remove(created[1].id), true); // delete the second part
+  assert.strictEqual(store.messages.length, 0, 'the entire group must be removed');
 });
 
 test('store.remove deletes by id and broadcasts a "delete" event', () => {
@@ -82,14 +117,14 @@ test('store.remove deletes by id and broadcasts a "delete" event', () => {
   let written = null;
   const fakeRes = { write: (s) => { written = s; } };
   store.registerClient(fakeRes);
-  const msg = store.add('hello', 'iOS-abcd1234');
+  const created = store.add('hello', 'iOS-abcd1234');
   written = null;
-  const removed = store.remove(msg.id);
+  const removed = store.remove(created[0].id);
   assert.strictEqual(removed, true);
   assert.strictEqual(store.messages.length, 0);
   const event = JSON.parse(written.slice(6, -2));
   assert.strictEqual(event.type, 'delete');
-  assert.strictEqual(event.id, msg.id);
+  assert.strictEqual(event.id, created[0].id);
 });
 
 test('store.remove returns false for an unknown id', () => {
@@ -121,9 +156,14 @@ test('validateContent rejects empty content', () => {
   assert.ok(r.error);
 });
 
-test('validateContent rejects content over 2000 chars', () => {
-  const r = validateContent({ content: 'x'.repeat(2001) });
+test('validateContent rejects content over the total limit', () => {
+  const r = validateContent({ content: 'x'.repeat(TOTAL_LIMIT + 1) });
   assert.strictEqual(r.status, 400);
+});
+
+test('validateContent accepts content in the auto-split range', () => {
+  const r = validateContent({ content: 'x'.repeat(SINGLE_PART_LIMIT + 1) });
+  assert.strictEqual(r.error, undefined, 'overlong-but-under-total content is accepted and split later');
 });
 
 test('validateContent accepts valid content', () => {
@@ -187,15 +227,58 @@ test('POST /send with empty content returns 400', async () => {
   server.close();
 });
 
-test('POST /send with overlong content returns 400', async () => {
-  const { server, port } = await startTestServer();
+test('POST /send with overlong content auto-splits into linked parts', async () => {
+  const { server, store, port } = await startTestServer();
+  const content = 'line-' + 'x'.repeat(495) + '\n';
+  const full = content.repeat(21); // 21 lines * 500 = 10500 chars -> 2 parts
   const r = await fetchUrl(port, '/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content: 'x'.repeat(2001) }),
+    body: JSON.stringify({ content: full, device: 'macOS-split' }),
+  });
+  assert.strictEqual(r.status, 200);
+  assert.strictEqual(JSON.parse(r.body).ok, true);
+  assert.ok(store.messages.length >= 2, 'overlong content must be stored as multiple parts');
+  assert.strictEqual(store.messages.map((m) => m.content).join(''), full.trim());
+  const gid = store.messages[0].group.id;
+  store.messages.forEach((m) => assert.strictEqual(m.group.id, gid));
+  server.close();
+});
+
+test('POST /send over the total limit returns 400', async () => {
+  const { server, store, port } = await startTestServer();
+  const r = await fetchUrl(port, '/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content: 'x'.repeat(TOTAL_LIMIT + 1) }),
   });
   assert.strictEqual(r.status, 400);
+  assert.strictEqual(store.messages.length, 0, 'nothing may be stored on rejection');
   server.close();
+});
+
+// readBody 的流式上限直接在纯函数层验证(集成层客户端行为随断连时序波动)
+test('readBody rejects a body stream over 1MB with a 413-marked error', async () => {
+  const { EventEmitter } = require('node:events');
+  const fakeReq = new EventEmitter();
+  fakeReq.destroy = () => { fakeReq.destroyed = true; };
+  const pending = readBody(fakeReq);
+  fakeReq.emit('data', Buffer.alloc(1024 * 1024 + 1));
+  await assert.rejects(pending, (err) => err.status === 413);
+});
+
+test('readBody decodes multi-byte characters split across chunks', async () => {
+  const { EventEmitter } = require('node:events');
+  const fakeReq = new EventEmitter();
+  const text = '中文日志😀';
+  const buf = Buffer.from(text, 'utf8');
+  // 在多字节字符中间切开两个 chunk:字符串拼接会产生乱码,Buffer.concat 不会
+  const half = Math.floor(buf.length / 2);
+  const pending = readBody(fakeReq);
+  fakeReq.emit('data', buf.slice(0, half));
+  fakeReq.emit('data', buf.slice(half));
+  fakeReq.emit('end');
+  assert.strictEqual(await pending, text);
 });
 
 test('POST /send without device derives one from the request UA', async () => {

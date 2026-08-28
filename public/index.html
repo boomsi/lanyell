@@ -49,6 +49,42 @@
     }
     ul { list-style: none; margin: 0; padding: 0; }
     li { background: #fff; padding: 11px 14px; border-radius: 10px; margin-bottom: 8px; box-shadow: 0 1px 2px rgba(0,0,0,.06); word-break: break-word; }
+    /* 自动拆分组:堆叠卡片样式。叠态只露首段 + 一条"卡片边"(12px 缩进,
+       边标签汇总剩余全部段);第 2 条及以后的边隐藏。点击边整组全展开
+       (等宽、无缩进),组尾收起条收回全部。 */
+    li.grouped { border-left: 4px solid #4a90d9; margin-bottom: 0; }
+    /* 组首段:底部投影略强于普通消息,让"压在下一层上"的感觉更实 */
+    li.grouped:not(.stacked) { box-shadow: 0 3px 6px rgba(0,0,0,.12); }
+    li.grouped.stacked {
+      height: 20px; overflow: hidden;
+      display: flex; align-items: center;
+      padding: 0 14px; /* 边内只放小标签,覆盖默认 11px 上下内边距 */
+      border-radius: 0 0 10px 10px;
+      /* 三层阴影:顶部内侧暗影 = 上一层卡片压下来的影子(堆叠感的主要来源),
+         外层两道投影 = 这条边自身浮在页面/下一层之上 */
+      box-shadow:
+        inset 0 4px 6px -3px rgba(0,0,0,.3),
+        0 2px 4px rgba(0,0,0,.08),
+        0 4px 8px rgba(0,0,0,.14);
+      margin: 0 12px 3px; /* 左右固定 12px 缩进(不递增),层间留缝给阴影落点 */
+      cursor: pointer; transition: filter .15s;
+    }
+    li.grouped.stacked:hover { filter: brightness(.93); }
+    /* 第 3 条及以后的边:叠态直接隐藏,展开时恢复显示 */
+    li.grouped.hidden-edge { display: none; }
+    /* 叠态可见的最后一条边 / 展开态的组尾段:与下一条消息正常隔开 */
+    li.grouped.stacked.edge-last { margin-bottom: 8px; }
+    li.grouped.part-last:not(.stacked) { margin-bottom: 8px; }
+    /* 叠态隐藏正文与操作行,展开(移除 .stacked)后自动恢复 */
+    li.grouped.stacked .meta,
+    li.grouped.stacked .content { display: none; }
+    .stack-edge { display: none; font-size: 11px; color: #777; line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    li.grouped.stacked .stack-edge { display: block; }
+    /* 展开组的收起条:贴组尾卡片底部通栏,与叠边的 click to expand 对称 */
+    .collapse-bar { display: none; margin: 8px -14px -11px; padding: 7px 14px; border-top: 1px solid rgba(0,0,0,.07); font-size: 11px; color: #4a90d9; text-align: center; cursor: pointer; user-select: none; }
+    .collapse-bar:hover { background: rgba(74,144,217,.08); }
+    li.grouped:not(.stacked) .collapse-bar { display: block; }
+    .part-badge { font-size: 11px; line-height: 1.5; color: #555; background: rgba(0,0,0,.07); border-radius: 4px; padding: 1px 7px; }
     .meta { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
     .time, .device { color: #999; font-size: 12px; }
     .copy { padding: 3px 10px; font-size: 12px; line-height: 1.4; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #555; cursor: pointer; transition: all .15s; }
@@ -195,11 +231,111 @@
       });
     }
 
+    // ---- 自动拆分组的关联登记 ----
+    // groupParts: groupId -> { parts: Map<index, {id, content}> }
+    // idToGroup: msgId -> groupId(删除时反查清理)
+    // SSE 逐段到达时登记,供 Copy 按段序拼接全文;服务端删除总是整组删,
+    // 单段被移除只会发生在收到该段 delete 帧的路上,同样逐段清理。
+    const groupParts = new Map();
+    const idToGroup = new Map();
+    // 左边条强调色:与服务端调色板(lib/colors.js)的淡色一一对应的深色版,
+    // palette 变更时这里同步;查不到就退回主题蓝
+    const ACCENT_BY_BG = {
+      "#e3f2fd": "#4a90d9", "#e8f5e9": "#4caf50", "#fff3e0": "#ff9800",
+      "#fce4ec": "#f06292", "#f3e5f5": "#ab47bc", "#e0f7fa": "#26c6da",
+      "#fffde7": "#fbc02d", "#efebe9": "#8d6e63"
+    };
+
+    // 拼出一条消息可复制的全文:普通消息就是自身,拆分组按段序拼接全部段
+    function groupText(msg) {
+      if (!msg.group) return msg.content;
+      const entry = groupParts.get(msg.group.id);
+      if (!entry) return msg.content;
+      return Array.from(entry.parts.entries())
+        .sort(function (a, b) { return a[0] - b[0]; })
+        .map(function (e) { return e[1].content; })
+        .join("");
+    }
+
+    // 插入一条消息:普通消息 prepend 到最前;拆分组段插到同组已渲染段中
+    // 段序在自己之前的最后一段之后 —— 直接 prepend 会让同组显示成倒序
+    // (后到的段反而排在上面),日志必须正序阅读
+    function insertMsg(li, msg) {
+      if (!msg.group) { list.prepend(li); return; }
+      const sel = 'li[data-group="' + CSS.escape(msg.group.id) + '"]';
+      let anchor = null;
+      list.querySelectorAll(sel).forEach(function (s) {
+        const idx = Number(s.dataset.index);
+        if (idx < msg.group.index && (!anchor || idx > Number(anchor.dataset.index))) anchor = s;
+      });
+      if (anchor) anchor.after(li);
+      else list.prepend(li); // 组的第一段:作为整体头部放到最前
+    }
+
+    // 堆叠交互(组级):点击任一叠边 → 整组所有段全展开(等宽、无缩进);
+    // 组尾收起条 → 整组收回叠态。首段始终展开,不参与切换。
+    function expandGroup(gid) {
+      list.querySelectorAll('li[data-group="' + CSS.escape(gid) + '"]').forEach(function (li) {
+        li.classList.remove("stacked", "hidden-edge");
+        applyFold(li); // 展开后内容超高则启用常规折叠
+      });
+    }
+    function collapseGroup(gid) {
+      list.querySelectorAll('li[data-group="' + CSS.escape(gid) + '"]').forEach(function (li) {
+        if (Number(li.dataset.index) === 0) return;
+        li.classList.add("stacked");
+        if (Number(li.dataset.index) >= 2) li.classList.add("hidden-edge");
+        const content = li.querySelector(".content");
+        if (content) content.classList.remove("overflows", "expanded");
+        const toggle = li.querySelector(".fold-toggle");
+        if (toggle) {
+          toggle.classList.remove("show", "collapsed");
+          toggle.textContent = "expand";
+        }
+      });
+    }
+
     // Render one message (textContent everywhere to prevent XSS)
     function render(msg) {
       const li = document.createElement("li");
       li.dataset.id = msg.id;
       li.style.background = msg.color || "#fff";
+      // 拆分组:左边条 + [n/total] 徽章 + 登记到 groupParts 供拼全文
+      if (msg.group) {
+        li.classList.add("grouped");
+        li.dataset.group = msg.group.id;
+        li.dataset.index = msg.group.index;
+        li.style.borderLeftColor = ACCENT_BY_BG[msg.color] || "#4a90d9";
+        let entry = groupParts.get(msg.group.id);
+        if (!entry) {
+          entry = { parts: new Map() };
+          groupParts.set(msg.group.id, entry);
+        }
+        entry.parts.set(msg.group.index, { id: msg.id, content: msg.content });
+        idToGroup.set(msg.id, msg.group.id);
+        // 非首段默认叠在前段下面;叠态只显示一条边(index 1),其余全部隐藏
+        if (msg.group.index > 0) {
+          const index = msg.group.index;
+          const total = msg.group.total;
+          li.classList.add("stacked");
+          if (index >= 2) li.classList.add("hidden-edge");
+          // 叠态唯一可见边(edge-last)是 index 1;展开态组尾(part-last)
+          // 是最后一段(两段组时两者同段)
+          if (index === 1) li.classList.add("edge-last");
+          if (index === total - 1) li.classList.add("part-last");
+          // 边标签汇总全部剩余段:两段组报自身,多段组报"还有几段"
+          const edge = document.createElement("div");
+          edge.className = "stack-edge";
+          const label = total === 2
+            ? "part 2/2 · " + msg.content.length.toLocaleString() + " chars"
+            : "+" + (total - 1) + " more parts (2–" + total + ")";
+          edge.textContent = label + " — click to expand";
+          li.appendChild(edge);
+          li.addEventListener("click", function () {
+            if (li.classList.contains("stacked")) expandGroup(msg.group.id);
+          });
+        }
+      }
       const meta = document.createElement("div");
       meta.className = "meta";
       const time = document.createElement("span");
@@ -208,12 +344,22 @@
       const device = document.createElement("span");
       device.className = "device";
       device.textContent = msg.device;
+      meta.appendChild(time);
+      meta.appendChild(device);
+      if (msg.group) {
+        const badge = document.createElement("span");
+        badge.className = "part-badge";
+        badge.title = "auto-split message, part " + (msg.group.index + 1) + " of " + msg.group.total + " — Copy copies the full original";
+        badge.textContent = (msg.group.index + 1) + "/" + msg.group.total;
+        meta.appendChild(badge);
+      }
       const copy = document.createElement("button");
       copy.className = "copy";
       copy.type = "button";
       copy.textContent = "Copy";
       copy.addEventListener("click", function () {
-        copyText(msg.content).then(function () {
+        // 拆分组的任一段 Copy 都复制拼接后的完整原文,而非该片段
+        copyText(groupText(msg)).then(function () {
           copy.textContent = "✓ Copied";
           copy.classList.add("copied");
           setTimeout(function () {
@@ -238,8 +384,6 @@
           .then(function (r) { if (!r.ok) throw new Error("delete failed"); })
           .catch(function () { alert("delete failed"); });
       });
-      meta.appendChild(time);
-      meta.appendChild(device);
       // right group: fold toggle (if overflowing) -> Copy -> Delete.
       // Wrapped in .btn-group so on phones the action buttons take their own
       // row below time/device. margin-left:auto on the group keeps it
@@ -266,15 +410,39 @@
       content.className = "content collapsible";
       content.textContent = msg.content;
       li.appendChild(content);
-      list.prepend(li); // newest on top
-      // measure after insertion to decide whether the toggle should show
-      applyFold(li);
+      // 组尾段的收起条:整组展开后显示在最后一段底部,点击收回全部;
+      // 拦住冒泡,避免触发 li 上"叠态点击展开"的 handler
+      if (msg.group && msg.group.index === msg.group.total - 1) {
+        const bar = document.createElement("div");
+        bar.className = "collapse-bar";
+        bar.textContent = "▲ click to collapse";
+        bar.addEventListener("click", function (ev) {
+          ev.stopPropagation();
+          collapseGroup(msg.group.id);
+        });
+        li.appendChild(bar);
+      }
+      insertMsg(li, msg); // newest on top;拆分组段保持组内正序
+      // measure after insertion to decide whether the toggle should show.
+      // 叠态段跳过:内容被压成一条边,FOLD 的 clip/测量不适用,
+      // 展开时(expandGroup)会再单独调用
+      if (!li.classList.contains("stacked")) applyFold(li);
     }
 
-    // Remove a message element by id (called when a "delete" event arrives)
+    // Remove a message element by id (called when a "delete" event arrives).
+    // 同时清理组登记,否则 Map 里的残段会让 Copy 拼出已删除的内容。
     function removeMessage(id) {
       const li = list.querySelector('li[data-id="' + CSS.escape(id) + '"]');
       if (li) li.remove();
+      const gid = idToGroup.get(id);
+      if (!gid) return;
+      idToGroup.delete(id);
+      const entry = groupParts.get(gid);
+      if (!entry) return;
+      Array.from(entry.parts.entries()).forEach(function (e) {
+        if (e[1].id === id) entry.parts.delete(e[0]);
+      });
+      if (entry.parts.size === 0) groupParts.delete(gid);
     }
 
     // Fold long messages: only content whose natural height exceeds the limit
