@@ -5,9 +5,9 @@ const http = require('node:http');
 const { parseOsFromUa, getLanIp } = require('../lib/device');
 const { DEVICE_COLORS, colorForDevice } = require('../lib/colors');
 const { sseFrame, broadcast } = require('../lib/sse');
-const { createStore } = require('../lib/store');
-const { createHandler, validateContent, readBody } = require('../lib/routes');
-const { SINGLE_PART_LIMIT, TOTAL_LIMIT } = require('../lib/split');
+const { createStore, MESSAGE_TTL_MS } = require('../lib/store');
+const { createHandler, validateContent, readBody, MAX_BODY_BYTES } = require('../lib/routes');
+const { SINGLE_PART_LIMIT } = require('../lib/split');
 const { parseArgs, parsePort, DEFAULT_PORT } = require('../lib/args');
 const { HTML } = require('../server.js');
 
@@ -132,6 +132,59 @@ test('store.remove returns false for an unknown id', () => {
   assert.strictEqual(store.remove('nope'), false);
 });
 
+// ---------- store TTL 淘汰 ----------
+test('the message TTL is one hour', () => {
+  assert.strictEqual(MESSAGE_TTL_MS, 60 * 60 * 1000);
+});
+
+test('store.sweep keeps messages younger than the TTL', () => {
+  let clock = 1_000_000;
+  const store = createStore({ now: () => clock, sweepIntervalMs: 0 });
+  store.add('fresh', 'iOS-fresh');
+  clock += MESSAGE_TTL_MS - 1;
+  assert.strictEqual(store.sweep(), 0);
+  assert.strictEqual(store.messages.length, 1);
+});
+
+test('store.sweep drops expired messages and broadcasts a delete for each', () => {
+  let clock = 1_000_000;
+  const store = createStore({ now: () => clock, sweepIntervalMs: 0 });
+  const writes = [];
+  store.registerClient({ write: (s) => writes.push(s) });
+  store.add('old', 'iOS-old');
+  clock += MESSAGE_TTL_MS;
+  store.add('new', 'iOS-new');
+  assert.strictEqual(store.sweep(), 1, 'only the expired message is swept');
+  assert.strictEqual(store.messages.length, 1);
+  assert.strictEqual(store.messages[0].content, 'new');
+  // 必须广播 delete:否则已经打开的 tab 上那条过期消息永远不消失
+  const deletes = writes.map((w) => JSON.parse(w.slice(6, -2))).filter((e) => e.type === 'delete');
+  assert.strictEqual(deletes.length, 1);
+});
+
+test('store.sweep drops a split group as a unit, never a half group', () => {
+  let clock = 5_000_000;
+  const store = createStore({ now: () => clock, sweepIntervalMs: 0 });
+  const writes = [];
+  store.registerClient({ write: (s) => writes.push(s) });
+  store.add('x'.repeat(SINGLE_PART_LIMIT + 1), 'iOS-grp'); // 2 段
+  assert.strictEqual(store.messages.length, 2);
+  clock += MESSAGE_TTL_MS;
+  assert.strictEqual(store.sweep(), 2);
+  assert.strictEqual(store.messages.length, 0, '整组一起过期,不留半组');
+  const deletes = writes.map((w) => JSON.parse(w.slice(6, -2))).filter((e) => e.type === 'delete');
+  assert.strictEqual(deletes.length, 2, '每一段都要广播 delete,否则叠边还留在页面上');
+});
+
+test('store sweeps on its own timer, with no request to trigger it', async () => {
+  let clock = 9_000_000;
+  const store = createStore({ now: () => clock, ttlMs: 20, sweepIntervalMs: 10 });
+  store.add('old', 'iOS-timer');
+  clock += 1000; // 把时钟拨过 TTL
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  assert.strictEqual(store.messages.length, 0, '定时器必须自己扫,不能等下一次发送');
+});
+
 test('store.resolveDevice derives OS+IP tail when device is missing', () => {
   const store = createStore();
   const fakeReq = {
@@ -156,9 +209,12 @@ test('validateContent rejects empty content', () => {
   assert.ok(r.error);
 });
 
-test('validateContent rejects content over the total limit', () => {
-  const r = validateContent({ content: 'x'.repeat(TOTAL_LIMIT + 1) });
-  assert.strictEqual(r.status, 400);
+test('validateContent has no char cap: length is bounded by the byte wall only', () => {
+  // 曾经这里有第二道墙(TOTAL_LIMIT=100000 字符),它比字节墙早 5 倍触发,
+  // 把一次正常的 8000 行粘贴判成「内容太长」。长度不再在这里设限。
+  const r = validateContent({ content: 'x'.repeat(500000) });
+  assert.strictEqual(r.error, undefined);
+  assert.strictEqual(r.content.length, 500000);
 });
 
 test('validateContent accepts content in the auto-split range', () => {
@@ -245,26 +301,63 @@ test('POST /send with overlong content auto-splits into linked parts', async () 
   server.close();
 });
 
-test('POST /send over the total limit returns 400', async () => {
+// 回归:修复前这份内容撞的是 100000 字符上限(报文只有 496KB,离字节墙还远),
+// 也就是用户看到的 "content too long (max 100000 chars)"
+test('POST /send accepts an 8000-line log that used to hit the char cap', async () => {
   const { server, store, port } = await startTestServer();
+  const lines = [];
+  for (let i = 0; i < 8000; i++) {
+    const head = '2026-09-14T10:00:00.000Z INFO  [worker-' + (i % 8) + '] ';
+    lines.push((head + 'x'.repeat(60)).slice(0, 60));
+  }
+  const full = lines.join('\n'); // 8000 * 60 + 7999 = 487999 字符
   const r = await fetchUrl(port, '/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content: 'x'.repeat(TOTAL_LIMIT + 1) }),
+    body: JSON.stringify({ content: full, device: 'macOS-big' }),
   });
-  assert.strictEqual(r.status, 400);
-  assert.strictEqual(store.messages.length, 0, 'nothing may be stored on rejection');
+  assert.strictEqual(r.status, 200, 'an ~490KB log must be accepted');
+  assert.ok(store.messages.length > 1, 'it must be stored as multiple parts');
+  assert.strictEqual(store.messages.map((m) => m.content).join(''), full, 'parts must join back to the original');
+  const gid = store.messages[0].group.id;
+  store.messages.forEach((m) => assert.strictEqual(m.group.id, gid));
   server.close();
 });
 
 // readBody 的流式上限直接在纯函数层验证(集成层客户端行为随断连时序波动)
-test('readBody rejects a body stream over 1MB with a 413-marked error', async () => {
+test('readBody rejects a body stream over the byte cap with a 413-marked error', async () => {
   const { EventEmitter } = require('node:events');
   const fakeReq = new EventEmitter();
   fakeReq.destroy = () => { fakeReq.destroyed = true; };
   const pending = readBody(fakeReq);
-  fakeReq.emit('data', Buffer.alloc(1024 * 1024 + 1));
+  fakeReq.emit('data', Buffer.alloc(MAX_BODY_BYTES + 1));
   await assert.rejects(pending, (err) => err.status === 413);
+});
+
+// 字符墙删掉之后,413 是唯一的超限报错 —— 它必须带上具体数值,
+// 否则用户只知道"太大",不知道能发多大(旧文案 'payload too large' 就是这个毛病)
+test('an oversized body returns 413 naming the byte limit', async () => {
+  const { EventEmitter } = require('node:events');
+  const handler = createHandler(createStore(), HTML);
+  const fakeReq = new EventEmitter();
+  fakeReq.method = 'POST';
+  fakeReq.url = '/send';
+  fakeReq.headers = {};
+  fakeReq.destroy = () => {};
+  let status = 0;
+  let body = '';
+  const fakeRes = {
+    writeHead(code) { status = code; },
+    end(chunk) { body = chunk; },
+    on() {},
+  };
+  const pending = handler(fakeReq, fakeRes);
+  fakeReq.emit('data', Buffer.alloc(MAX_BODY_BYTES + 1));
+  fakeReq.emit('end');
+  await pending;
+  assert.strictEqual(status, 413);
+  const maxMb = MAX_BODY_BYTES / (1024 * 1024);
+  assert.strictEqual(JSON.parse(body).error, 'message too large (max ' + maxMb + ' MB)');
 });
 
 test('readBody decodes multi-byte characters split across chunks', async () => {

@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { splitContent, SINGLE_PART_LIMIT, TOTAL_LIMIT } = require('../lib/split');
+const { splitContent, SINGLE_PART_LIMIT } = require('../lib/split');
 
 // 检测字符串中是否存在孤立代理对(高代理后无低代理 / 低代理前无高代理)
 function hasLoneSurrogate(str) {
@@ -30,9 +30,8 @@ function assertValidSplit(content, limit) {
   return parts;
 }
 
-test('limits are exported as expected', () => {
+test('the single-part limit is exported as expected', () => {
   assert.strictEqual(SINGLE_PART_LIMIT, 10000);
-  assert.strictEqual(TOTAL_LIMIT, 100000);
 });
 
 test('splitContent returns the content as a single part at or under the limit', () => {

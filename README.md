@@ -49,6 +49,8 @@ If the port is already in use or requires root, lanyell prints a clear error ins
 - **Terminal QR code** — scan to open on mobile, no typing required
 - **Auto-growing input** — single line by default, expands up to 8 rows; two rows by default on phones
 - **Fold long messages** — long messages clip at 222px with a per-item expand/collapse toggle
+- **Auto-split long messages** — anything past 10,000 characters posts as a linked stack of parts; Copy on any part copies the full original
+- **Messages expire after an hour** — a message is dropped from the board (and from every open screen) one hour after it was posted
 - **Per-device colors** — each device gets a stable light tint so you can tell senders apart
 - **Delete messages** — anyone can remove a message; the change syncs to every screen instantly
 - **Responsive** — on phone-width screens the input and buttons stack vertically so nothing is cramped
