@@ -6,7 +6,7 @@ const { parseOsFromUa, getLanIp } = require('../lib/device');
 const { DEVICE_COLORS, colorForDevice } = require('../lib/colors');
 const { sseFrame, broadcast } = require('../lib/sse');
 const { createStore, MESSAGE_TTL_MS } = require('../lib/store');
-const { createHandler, validateContent, readBody, MAX_BODY_BYTES } = require('../lib/routes');
+const { createHandler, validateContent, readBody, decodeSegment, MAX_BODY_BYTES } = require('../lib/routes');
 const { SINGLE_PART_LIMIT } = require('../lib/split');
 const { parseArgs, parsePort, DEFAULT_PORT } = require('../lib/args');
 const { HTML } = require('../server.js');
@@ -248,6 +248,20 @@ function fetchUrl(port, path, options) {
   }));
 }
 
+// 裸 http 请求:路径原样发出,不被 fetch 的 URL 解析器改写 ——
+// 测畸形百分号编码必须走这条,否则测不到真正到服务端的那个 path
+function rawRequest(port, method, rawPath) {
+  return new Promise((resolve, reject) => {
+    const req = http.request({ host: '127.0.0.1', port, method, path: rawPath }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve({ status: res.statusCode, body: Buffer.concat(chunks) }));
+    });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
 test('GET / returns the HTML page', async () => {
   const { server, port } = await startTestServer();
   const r = await fetchUrl(port, '/');
@@ -412,6 +426,26 @@ test('DELETE a non-existent id returns 404', async () => {
   const { server, port } = await startTestServer();
   const r = await fetchUrl(port, '/messages/does-not-exist', { method: 'DELETE' });
   assert.strictEqual(r.status, 404);
+  server.close();
+});
+
+// ---------- 畸形 URL 不能再打挂进程 ----------
+// 回归:decodeURIComponent 抛出的 URIError 在异步 handler 里就是 unhandled
+// rejection,Node 直接终止进程 —— 局域网里任何一条 /messages/%zz 就能干掉整个板子。
+test('decodeSegment returns null instead of throwing on malformed escapes', () => {
+  assert.strictEqual(decodeSegment('%zz'), null);
+  assert.strictEqual(decodeSegment('%'), null);
+  assert.strictEqual(decodeSegment('%E4%B8'), null, '截断的多字节序列也算畸形');
+  assert.strictEqual(decodeSegment('abc'), 'abc');
+  assert.strictEqual(decodeSegment('%E4%B8%AD'), '中');
+});
+
+test('a malformed id in DELETE returns 400 and the server survives', async () => {
+  const { server, port } = await startTestServer();
+  const r = await rawRequest(port, 'DELETE', '/messages/%zz');
+  assert.strictEqual(r.status, 400);
+  // 关键不是 400,而是进程还活着、后续请求照常
+  assert.strictEqual((await fetchUrl(port, '/')).status, 200);
   server.close();
 });
 
