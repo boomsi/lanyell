@@ -16,14 +16,49 @@
        so the box-sizing border-box padding is preserved at every row count.
        --input-base is the reset height autoGrow returns to (1 row desktop,
        2 rows on phones). */
-    textarea { flex: 1; padding: 11px 36px 11px 14px; font-size: 16px; line-height: 1.5; border: 1px solid #ddd; border-radius: 10px; outline: none; background: #fff; resize: none; overflow-y: auto; height: var(--input-base, 44px); max-height: 216px; --input-base: 44px; }
-    textarea:focus { border-color: #4a90d9; }
+    textarea { flex: 1; padding: 11px 36px 11px 14px; font-size: 16px; line-height: 1.5; border: none; outline: none; background: transparent; resize: none; overflow-y: auto; height: var(--input-base, 44px); max-height: 216px; --input-base: 44px; }
     /* hide the input's scrollbar but keep it scrollable past 8 rows */
     textarea { scrollbar-width: none; -ms-overflow-style: none; }
     textarea::-webkit-scrollbar { display: none; }
-    /* input wrapper + clear button inside the textarea's right side */
-    .input-wrap { position: relative; flex: 1; display: flex; }
-    .input-wrap textarea { width: 100%; }
+    /* 输入区外框:边框从 textarea 提到了这一层,附件条和输入框共用同一个
+       边框和圆角,视觉上是一体的。聚焦高亮也要跟着搬过来(:focus-within)。
+       overflow:hidden 是为了让附件条的底色被外框圆角裁掉。 */
+    .input-wrap { position: relative; flex: 1; display: flex; flex-direction: column; min-width: 0; border: 1px solid #ddd; border-radius: 10px; background: #fff; overflow: hidden; }
+    .input-wrap:focus-within { border-color: #4a90d9; }
+    /* 附件条:发送前暂存的附件,贴在输入框上侧、共用边框。
+       用方形缩略图平铺,不是一行一行的长条。 */
+    .attach-bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #eee; background: #fafafa; max-height: 190px; overflow-y: auto; }
+    .attach-bar[hidden] { display: none; }
+    /* 方形瓦片:--tile 是边长,输入区里小一点,消息列表里大一点 */
+    .tile { --tile: 96px; width: var(--tile); flex: none; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+    .attach-bar .tile { --tile: 72px; }
+    .tile-thumb { position: relative; width: var(--tile); height: var(--tile); border-radius: 8px; overflow: hidden; background: #eef1f4; display: flex; align-items: center; justify-content: center; }
+    .tile-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .tile-icon { font-size: 26px; line-height: 1; }
+    .attach-bar .tile-icon { font-size: 22px; }
+    .tile-name { font-size: 10px; line-height: 1.3; color: #666; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tile-size { font-size: 10px; line-height: 1.3; color: #aaa; text-align: center; }
+    .tile-x { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; padding: 0; border: none; border-radius: 50%; background: rgba(0,0,0,.55); color: #fff; font-size: 12px; line-height: 1; cursor: pointer; }
+    .tile-x:hover { background: rgba(0,0,0,.8); }
+    /* 右下角标:文件后缀。半透明深底是为了压在图片预览上也读得清 —— 浅色底
+       会被浅色的图片吞掉对比度。 */
+    .tile-ext { position: absolute; right: 2px; bottom: 2px; max-width: calc(100% - 4px); padding: 1px 4px; border-radius: 4px; background: rgba(0,0,0,.6); color: #fff; font-size: 9px; font-weight: 600; line-height: 1.5; letter-spacing: .3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* 消息里的附件格子。white-space:normal 抵消从 .content 继承的 pre-wrap,
+       否则文件名里的空格会被原样渲染成怪样子。 */
+    .file-grid { display: flex; flex-wrap: wrap; gap: 8px; white-space: normal; margin-bottom: 6px; }
+    /* 下载按钮:固定在缩略图右上角,整块瓦片本身不可点(图片上误触一下
+       就开始下载很烦,而且哪块能点、哪块不能点也看不出来) */
+    .tile-dl { position: absolute; top: 2px; right: 2px; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; font-size: 13px; font-weight: 700; line-height: 1; text-decoration: none; }
+    .tile-dl:hover { background: #4a90d9; }
+    /* ＋ 按钮:次要动作,别和主按钮抢视觉 */
+    .btn-row .add-btn { flex: 0 0 auto; background: #f0f0f0; color: #555; font-size: 20px; line-height: 1; padding: 11px 16px; }
+    .btn-row .add-btn:hover { background: #e4e4e4; }
+    /* 通用 button:disabled 的权重低于 .btn-row .add-btn,得单独压一次 */
+    .btn-row .add-btn:disabled { background: #eee; color: #bbb; }
+    /* 拖拽遮罩:pointer-events:none 保证 drop 事件仍能落到下面的元素上 */
+    .drop-overlay { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(74,144,217,.10); border: 3px dashed #4a90d9; z-index: 50; pointer-events: none; }
+    .drop-overlay.show { display: flex; }
+    .drop-inner { background: #fff; padding: 16px 26px; border-radius: 12px; font-size: 16px; color: #4a90d9; box-shadow: 0 6px 20px rgba(0,0,0,.15); }
     .clear-btn { position: absolute; right: 8px; bottom: 12px; width: 22px; height: 22px; padding: 0; border: none; border-radius: 50%; background: #ccc; color: #fff; font-size: 14px; cursor: pointer; display: none; align-items: center; justify-content: center; }
     .clear-btn.show { display: flex; }
     .clear-btn:hover { background: #999; }
@@ -94,6 +129,8 @@
     .delete { padding: 3px 10px; font-size: 12px; line-height: 1.4; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #ff3b30; cursor: pointer; transition: all .15s; }
     .delete:hover { border-color: #ff3b30; background: #ff3b30; color: #fff; }
     .content { display: block; white-space: pre-wrap; }
+    /* 带附件时,说明文字排在附件格子下面 */
+    .msg-text { display: block; white-space: pre-wrap; }
     /* collapse: only content that actually overflows gets clipped at 222px.
        Keep pre-wrap so the original formatting (newlines, spacing) is preserved
        exactly. No ellipsis — line-clamp would break the format. */
@@ -119,13 +156,17 @@
     <span class="status" id="status">connecting…</span>
     <form id="f">
       <div class="input-wrap">
+        <div class="attach-bar" id="attachBar" hidden></div>
         <textarea id="m" placeholder="Type a message, Enter to send…" autocomplete="off" autofocus rows="1"></textarea>
         <button type="button" class="clear-btn" id="clear" title="Clear">×</button>
       </div>
       <div class="btn-row">
-        <button type="submit">Send</button>
+        <button type="button" class="add-btn" id="addFile" title="Attach a file" aria-label="Attach a file">＋</button>
+        <button type="submit" id="sendBtn">Send</button>
       </div>
     </form>
+    <input type="file" id="fileInput" multiple hidden>
+    <div class="drop-overlay" id="dropOverlay"><div class="drop-inner">Drop a file to attach</div></div>
     <ul id="list"></ul>
   </div>
   <script>
@@ -166,6 +207,278 @@
         form.requestSubmit();
       }
     });
+
+    // ---------- 附件 ----------
+    // 支持多选:＋ 选择、拖拽、Ctrl+V 三处都汇到 stageFiles,全部暂存在本地
+    // (不上传、不占服务器),按 Send 才真正传。
+    const attachBar = document.getElementById("attachBar");
+    const addBtn = document.getElementById("addFile");
+    const sendBtn = document.getElementById("sendBtn");
+    const fileInput = document.getElementById("fileInput");
+    const dropOverlay = document.getElementById("dropOverlay");
+    // 待发送的附件:[{ file, url }]。url 是图片的本地预览 object URL(非图片为
+    // null)。object URL 必须显式 revoke,否则每选一张图就泄漏一份内存。
+    let pendingFiles = [];
+    // 传过一次就按 File 复用,重试时不必重传整个文件
+    let uploads = new Map();
+
+    // 大小是给用户看的;长度上限由服务端说了算,前端不复制那份常量
+    function formatBytes(n) {
+      if (n < 1024) return n + " B";
+      if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KB";
+      if (n < 1024 * 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + " MB";
+      return (n / (1024 * 1024 * 1024)).toFixed(2) + " GB";
+    }
+
+    // 只按 MIME 和扩展名挑个图标,不参与任何安全判断
+    function fileIcon(file) {
+      const type = file.type || "";
+      const name = (file.name || "").toLowerCase();
+      if (type.indexOf("image/") === 0 || /\.(png|jpe?g|gif|webp|heic|bmp|svg)$/.test(name)) return "🖼";
+      if (type.indexOf("video/") === 0 || /\.(mp4|mov|webm|mkv|avi)$/.test(name)) return "🎬";
+      if (type.indexOf("audio/") === 0 || /\.(mp3|wav|m4a|flac|ogg)$/.test(name)) return "🎵";
+      if (type === "application/pdf" || /\.pdf$/.test(name)) return "📕";
+      // U+FE0F 是变体选择符:没有它这个字符在 macOS 上按文字呈现(单色),
+      // 和旁边彩色的 emoji 图标不一致
+      if (/\.(zip|tar|gz|7z|rar)$/.test(name)) return "🗜️";
+      return "📄";
+    }
+
+    // 这个类型能不能出缩略图。SVG 要排除:服务端的预览路由不放行它(它是能带
+    // 脚本的 XML),本地也就不预览 —— 否则发送者看到缩略图、别人只看到图标。
+    function looksLikeImage(file) {
+      const type = (file.type || "").toLowerCase();
+      return type.indexOf("image/") === 0 && type.indexOf("svg") === -1;
+    }
+
+    // 右下角标显示的后缀。文件名是用户输入:只取字母数字并限长,
+    // 太长或带怪字符会把角标撑破。没有后缀就显示 FILE。
+    // 大写在这里做而不是靠 CSS 的 text-transform:textContent 不会应用 CSS,
+    // 只靠样式的话 DOM 里还是小写,选择和复制出来就对不上看到的
+    function fileExt(file) {
+      const name = (file.name || "").trim();
+      const dot = name.lastIndexOf(".");
+      if (dot <= 0 || dot === name.length - 1) return "FILE";
+      return (name.slice(dot + 1).replace(/[^A-Za-z0-9]/g, "").slice(0, 5) || "file").toUpperCase();
+    }
+
+    // 方形缩略图。图片显示预览,其它显示图标,右下角标标出文件类型。
+    // 全程 textContent —— 文件名是用户输入,不能拼进 HTML。
+    function buildThumb(file, previewUrl) {
+      const thumb = document.createElement("div");
+      thumb.className = "tile-thumb";
+      if (previewUrl) {
+        const img = document.createElement("img");
+        img.src = previewUrl;
+        img.alt = "";
+        img.loading = "lazy";
+        // 声明是图片但内容不是,加载必然失败 —— 退回图标,别留一个破图
+        img.addEventListener("error", function () {
+          img.remove();
+          const fallback = document.createElement("span");
+          fallback.className = "tile-icon";
+          fallback.textContent = fileIcon(file);
+          thumb.appendChild(fallback);
+        });
+        thumb.appendChild(img);
+      } else {
+        const icon = document.createElement("span");
+        icon.className = "tile-icon";
+        icon.textContent = fileIcon(file);
+        thumb.appendChild(icon);
+      }
+      // 类型角标:图标是粗粒度的(一个 📄 覆盖一大票类型),角标把具体后缀说清楚
+      const ext = document.createElement("span");
+      ext.className = "tile-ext";
+      ext.textContent = fileExt(file);
+      thumb.appendChild(ext);
+      return thumb;
+    }
+
+    function buildTileLabels(file) {
+      const name = document.createElement("span");
+      name.className = "tile-name";
+      name.textContent = file.name || "file";
+      name.title = file.name || "file";
+      const size = document.createElement("span");
+      size.className = "tile-size";
+      size.textContent = formatBytes(file.size || 0);
+      return [name, size];
+    }
+
+    // 附件条:方形缩略图平铺,每个右上角一个 × 单独移除
+    function renderAttachBar() {
+      attachBar.textContent = "";
+      if (pendingFiles.length === 0) {
+        attachBar.hidden = true;
+        return;
+      }
+      attachBar.hidden = false;
+      pendingFiles.forEach(function (entry) {
+        const tile = document.createElement("div");
+        tile.className = "tile";
+        const thumb = buildThumb(entry.file, entry.url);
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "tile-x";
+        remove.textContent = "×";
+        remove.title = "Remove attachment";
+        remove.addEventListener("click", function () { removePending(entry); });
+        thumb.appendChild(remove);
+        tile.appendChild(thumb);
+        buildTileLabels(entry.file).forEach(function (el) { tile.appendChild(el); });
+        attachBar.appendChild(tile);
+      });
+    }
+
+    function removePending(entry) {
+      if (entry.url) URL.revokeObjectURL(entry.url);
+      uploads.delete(entry.file);
+      pendingFiles = pendingFiles.filter(function (e) { return e !== entry; });
+      renderAttachBar();
+      input.focus();
+    }
+
+    // 发送成功后清空暂存。object URL 必须在这里释放。
+    function clearPending() {
+      pendingFiles.forEach(function (e) { if (e.url) URL.revokeObjectURL(e.url); });
+      pendingFiles = [];
+      uploads = new Map();
+      renderAttachBar();
+    }
+
+    // ＋ / 拖拽 / 粘贴三处都汇到这里,全部收下
+    function stageFiles(fileList) {
+      const incoming = Array.prototype.slice.call(fileList || []).filter(Boolean);
+      if (incoming.length === 0) return;
+      incoming.forEach(function (file) {
+        pendingFiles = pendingFiles.concat([{
+          file: file,
+          url: looksLikeImage(file) ? URL.createObjectURL(file) : null,
+        }]);
+      });
+      renderAttachBar();
+      input.focus();
+    }
+
+    addBtn.addEventListener("click", function () { fileInput.click(); });
+    fileInput.addEventListener("change", function () {
+      stageFiles(fileInput.files);
+      fileInput.value = ""; // 置空才能再次选中同一个文件
+    });
+
+    // 拖拽:整页接收。dragenter/dragover 必须 preventDefault,否则浏览器会把
+    // 拖进来的文件当导航直接打开,整个页面被顶掉。只认带 Files 的拖拽 ——
+    // 拖选中的一段文字不该触发附件。
+    function dragHasFiles(ev) {
+      if (!ev.dataTransfer) return false;
+      const types = ev.dataTransfer.types || [];
+      return Array.prototype.indexOf.call(types, "Files") !== -1;
+    }
+    let dragDepth = 0;
+    window.addEventListener("dragenter", function (ev) {
+      if (!dragHasFiles(ev)) return;
+      ev.preventDefault();
+      dragDepth++;
+      dropOverlay.classList.add("show");
+    });
+    window.addEventListener("dragover", function (ev) {
+      if (dragHasFiles(ev)) ev.preventDefault();
+    });
+    window.addEventListener("dragleave", function (ev) {
+      if (!dragHasFiles(ev)) return;
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) dropOverlay.classList.remove("show");
+    });
+    window.addEventListener("drop", function (ev) {
+      if (!dragHasFiles(ev)) return;
+      ev.preventDefault();
+      dragDepth = 0;
+      dropOverlay.classList.remove("show");
+      stageFiles(ev.dataTransfer.files);
+    });
+
+    // Ctrl+V 粘图:剪贴板里有文件(截图)才接管,普通文字粘贴保持默认行为
+    window.addEventListener("paste", function (ev) {
+      const files = ev.clipboardData && ev.clipboardData.files;
+      if (!files || files.length === 0) return;
+      ev.preventDefault();
+      stageFiles(files);
+    });
+
+    // 上传用 XHR 而不是 fetch:fetch 拿不到上传进度,传大文件时用户看不到任何反馈。
+    // 文件名走请求头,必须 percent 编码 —— HTTP 头只能安全携带 latin-1。
+    function uploadFile(file, onProgress) {
+      return new Promise(function (resolve, reject) {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", "/files");
+        xhr.setRequestHeader("X-Filename", encodeURIComponent(file.name || "file"));
+        xhr.setRequestHeader("X-File-Type", file.type || "");
+        xhr.upload.addEventListener("progress", function (ev) {
+          if (ev.lengthComputable) onProgress(ev.loaded / ev.total);
+        });
+        xhr.addEventListener("load", function () {
+          if (xhr.status === 200) {
+            try {
+              resolve(JSON.parse(xhr.responseText));
+            } catch (err) {
+              reject(new Error("upload failed"));
+            }
+            return;
+          }
+          let message = "upload failed";
+          try {
+            message = JSON.parse(xhr.responseText).error || message;
+          } catch (err) { /* 响应不是 JSON,用默认文案 */ }
+          reject(new Error(message));
+        });
+        xhr.addEventListener("error", function () { reject(new Error("upload failed")); });
+        xhr.send(file);
+      });
+    }
+
+    // 发送中锁住输入,并让 Send 按钮报告进度
+    let sending = false;
+    function setSending(value, percent) {
+      sending = value;
+      input.disabled = value;
+      addBtn.disabled = value;
+      sendBtn.disabled = value;
+      sendBtn.textContent = value
+        ? (percent === undefined ? "Sending…" : "Sending " + percent + "%")
+        : "Send";
+    }
+
+    // 消息里的附件格子。下载路由带 Content-Disposition: attachment 强制下载 ——
+    // 上传的内容绝不会被当作页面渲染。
+    // 图片缩略图走 /files/<id>/preview:那条路由只对**从文件头字节嗅探出来的**
+    // 位图放行,所以声明成图片而内容不是时,这里会加载失败并自动退回图标。
+    function buildFileGrid(attachments) {
+      const grid = document.createElement("div");
+      grid.className = "file-grid";
+      attachments.forEach(function (file) {
+        const tile = document.createElement("div");
+        tile.className = "tile file-tile";
+        const preview = looksLikeImage(file)
+          ? "/files/" + encodeURIComponent(file.id) + "/preview"
+          : null;
+        const thumb = buildThumb(file, preview);
+        // 下载固定放在缩略图右上角的按钮上,整个瓦片不可点:图片预览上误触
+        // 一下就开始下载很烦,而且一处能点、别处不能点也看不出来
+        const dl = document.createElement("a");
+        dl.className = "tile-dl";
+        dl.href = "/files/" + encodeURIComponent(file.id);
+        dl.setAttribute("download", file.name || "file");
+        dl.title = "Download " + (file.name || "file") + " · " + formatBytes(file.size || 0);
+        dl.setAttribute("aria-label", dl.title);
+        dl.textContent = "↓";
+        thumb.appendChild(dl);
+        tile.appendChild(thumb);
+        buildTileLabels(file).forEach(function (el) { tile.appendChild(el); });
+        grid.appendChild(tile);
+      });
+      return grid;
+    }
 
     // Detect real OS: prefer userAgentData (new API, Chromium), fall back to UA string
     function detectOs() {
@@ -402,13 +715,21 @@
         foldToggle.classList.toggle("collapsed", !expanded);
       });
       btnGroup.appendChild(foldToggle);
-      btnGroup.appendChild(copy);
+      // 纯附件消息没有文字可复制,不显示 Copy
+      if (msg.content) btnGroup.appendChild(copy);
       btnGroup.appendChild(del);
       meta.appendChild(btnGroup);
       li.appendChild(meta);
       const content = document.createElement("span");
       content.className = "content collapsible";
-      content.textContent = msg.content;
+      // 一条消息可以有附件、有文字,或两者都有
+      if (msg.files && msg.files.length) content.appendChild(buildFileGrid(msg.files));
+      if (msg.content) {
+        const text = document.createElement("span");
+        text.className = "msg-text";
+        text.textContent = msg.content;
+        content.appendChild(text);
+      }
       li.appendChild(content);
       // 组尾段的收起条:整组展开后显示在最后一段底部,点击收回全部;
       // 拦住冒泡,避免触发 li 上"叠态点击展开"的 handler
@@ -478,28 +799,55 @@
       else if (event.type === "delete") removeMessage(event.id);
     };
 
-    // Submit on Enter or button click
+    // Submit on Enter or button click.
+    // 带附件时两步走:先把文件传到 /files 拿到 id,再把 id 连同文字发给 /send。
+    // 这样请求体始终很小,大文件也不受 /send 的字节上限影响。
     form.addEventListener("submit", async function (ev) {
       ev.preventDefault();
+      if (sending) return;
       const content = input.value.trim();
-      if (!content) return;
-      input.value = "";
-      autoGrow(); // collapse height after clearing
-      syncClearBtn(); // hide the clear button too
-      input.disabled = true;
+      const queue = pendingFiles.slice();
+      // 有文字或有附件都能发,两样都没有就不做任何事
+      if (!content && queue.length === 0) return;
+
+      setSending(true);
       try {
+        // 逐个上传,进度折算成整条消息的完成度(第几个 + 当前这个的进度)。
+        // 传过的按 File 复用:重试时前面的不用重传,不然一次网络抖动就要
+        // 把几百兆重新传一遍。
+        const ids = [];
+        for (let i = 0; i < queue.length; i++) {
+          const file = queue[i].file;
+          let meta = uploads.get(file);
+          if (!meta) {
+            meta = await uploadFile(file, function (ratio) {
+              setSending(true, Math.round(((i + ratio) / queue.length) * 100));
+            });
+            uploads.set(file, meta);
+          }
+          ids.push(meta.id);
+        }
+        const payload = { content: content, device: deviceId };
+        if (ids.length) payload.fileIds = ids;
         const r = await fetch("/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ content: content, device: deviceId })
+          body: JSON.stringify(payload)
         });
         if (!r.ok) throw new Error((await r.json()).error || "send failed");
+        // 只有整条消息真的发出去了才清空。失败时文字和附件都留着,
+        // 用户直接再按一次 Send 就能重试。
+        input.value = "";
+        clearPending();
+        autoGrow(); // collapse height after clearing
+        syncClearBtn(); // hide the clear button too
       } catch (err) {
         input.value = content;
         autoGrow();
+        syncClearBtn();
         alert(err.message);
       } finally {
-        input.disabled = false;
+        setSending(false);
         input.focus();
       }
     });

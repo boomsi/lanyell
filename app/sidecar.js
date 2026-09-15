@@ -11,8 +11,7 @@ const http = require('http');
 const path = require('path');
 const fs = require('fs');
 
-const { createStore } = require('../lib/store');
-const { createHandler } = require('../lib/routes');
+const { createApp } = require('../lib/app');
 
 const PORT = parseInt(process.env.LANYELL_PORT || '3000', 10);
 const HOST = '0.0.0.0';
@@ -32,8 +31,13 @@ function main() {
     process.exit(1);
   }
 
-  const store = createStore();
-  const server = http.createServer(createHandler(store, html));
+  // 和 CLI 走同一条接线路径,避免两个入口各接一半、漏掉依赖
+  const app = createApp(html);
+  const server = http.createServer(app.handler);
+  // 退出时清掉附件目录(信号不会触发 'exit',必须单独挂)
+  process.on('exit', () => app.files.cleanup());
+  process.on('SIGINT', () => { app.files.cleanup(); process.exit(130); });
+  process.on('SIGTERM', () => { app.files.cleanup(); process.exit(143); });
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {
       console.error('port ' + PORT + ' is already in use');

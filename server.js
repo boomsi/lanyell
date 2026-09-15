@@ -10,8 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const QRCode = require('qrcode');
 
-const { createStore } = require('./lib/store');
-const { createHandler } = require('./lib/routes');
+const { createApp } = require('./lib/app');
 const { getLanIp } = require('./lib/device');
 const { parseArgs } = require('./lib/args');
 const { listenWithFallback } = require('./lib/listen');
@@ -22,10 +21,22 @@ const HOST = '0.0.0.0'; // listen on all interfaces so LAN peers can reach it
 const HTML_PATH = path.join(__dirname, 'public', 'index.html');
 const HTML = fs.readFileSync(HTML_PATH, 'utf8');
 
-// Create the shared store and the request handler bound to it
-const store = createStore();
-const handler = createHandler(store, HTML);
+// store / 附件存储 / 处理器都在 createApp 里装配 —— 桌面端 sidecar 走的是
+// 同一个函数,两个入口不会各自漂移(lib/app.js 里有详细说明)
+const app = createApp(HTML);
+const { files, store, handler } = app;
 const server = http.createServer(handler);
+
+// 退出时清掉附件目录。'exit' 覆盖正常退出,两个信号覆盖 Ctrl-C / kill ——
+// 信号默认不会触发 'exit',漏掉它们的话每次 Ctrl-C 都会在 /tmp 留下一个
+// 可能上百兆的目录,越攒越多。
+function shutdown(code) {
+  files.cleanup();
+  process.exit(code);
+}
+process.on('exit', () => files.cleanup());
+process.on('SIGINT', () => shutdown(130));
+process.on('SIGTERM', () => shutdown(143));
 
 // Only start the server when run directly (node server.js / npx lanyell).
 // When required by tests, just export without listening.

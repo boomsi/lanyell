@@ -50,6 +50,7 @@ If the port is already in use or requires root, lanyell prints a clear error ins
 - **Auto-growing input** — single line by default, expands up to 8 rows; two rows by default on phones
 - **Fold long messages** — long messages clip at 222px with a per-item expand/collapse toggle
 - **Auto-split long messages** — anything past 10,000 characters posts as a linked stack of parts; Copy on any part copies the full original
+- **File attachments** — drag files anywhere on the page, paste screenshots, or use the ＋ button; multi-select works, and they stack above the input as square thumbnails until you send. Images preview inline, everything else gets a type icon, and any attachment downloads in one click (up to 100 MB per file)
 - **Messages expire after an hour** — a message is dropped from the board (and from every open screen) one hour after it was posted
 - **Per-device colors** — each device gets a stable light tint so you can tell senders apart
 - **Delete messages** — anyone can remove a message; the change syncs to every screen instantly
