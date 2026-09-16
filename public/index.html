@@ -26,8 +26,11 @@
     .input-wrap { position: relative; flex: 1; display: flex; flex-direction: column; min-width: 0; border: 1px solid #ddd; border-radius: 10px; background: #fff; overflow: hidden; }
     .input-wrap:focus-within { border-color: #4a90d9; }
     /* 附件条:发送前暂存的附件,贴在输入框上侧、共用边框。
-       用方形缩略图平铺,不是一行一行的长条。 */
-    .attach-bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #eee; background: #fafafa; max-height: 190px; overflow-y: auto; }
+       用方形缩略图平铺,不是一行一行的长条。
+       这里**不给 max-height**:瓦片换行后如果被限高裁剪,第二行会从中间被切掉,
+       名字和大小整条看不见 —— 内部滚动条在小屏上也不明显,看着就是坏的。
+       附件多的时候让整条自然变高、由页面滚动,比裁掉内容好。 */
+    .attach-bar { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 10px; border-bottom: 1px solid #eee; background: #fafafa; }
     .attach-bar[hidden] { display: none; }
     /* 方形瓦片:--tile 是边长,输入区里小一点,消息列表里大一点 */
     .tile { --tile: 96px; width: var(--tile); flex: none; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
